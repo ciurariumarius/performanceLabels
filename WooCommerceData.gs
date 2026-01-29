@@ -348,10 +348,10 @@ function logStatus_(status, message) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     // Move status logging to AccountData sheet as requested
-    const sheet = ss.getSheetByName(WOO_ACCOUNT_SHEET_NAME); 
-    if (sheet) {
-      // Using range J2:K6 to sit to the right of standard columns (A-H)
-      const range = sheet.getRange("J2:K6"); 
+    const sheet = getOrCreateSheet(ss, WOO_ACCOUNT_SHEET_NAME); 
+    
+    // Using range J2:K6 to sit to the right of standard columns (A-H)
+    const range = sheet.getRange("J2:K6"); 
       range.setBorder(true, true, true, true, true, true);
       range.setValues([
         ["WOO WORKER STATUS", status],
@@ -365,7 +365,7 @@ function logStatus_(status, message) {
       else if (status === "COMPLETED") statusCell.setBackground("#CCFFCC");
       else statusCell.setBackground("#CCFFFF");
       SpreadsheetApp.flush(); 
-    }
+
   } catch(e) {
     console.warn("Failed to update status sheet: " + e.message);
   }
