@@ -16,8 +16,13 @@
  */
 
 // --- Script-level Constants ---
+const PERF_CONFIG_SHEET_NAME = "Config";
 const PERF_METRICS_SHEET_NAME = "Metrics";
+const PERF_LABELS_SHEET_NAME = "Labels Feed";
 const PERF_HEADER_ROW_NUM = 1;
+
+const PERF_OUTPUT_LABEL_HEADER = "LABEL_PERFORMANCE_INDEX";
+const PERF_SITE_ROAS_HEADER = "Site ROAS";
 
 /**
  * Main orchestrator function to run the performance index label calculation.
@@ -31,15 +36,19 @@ function runPerformanceIndexLabel() {
     }
 
     // --- 1. Load and Validate Configuration ---
+    const configSheet = spreadsheet.getSheetByName(PERF_CONFIG_SHEET_NAME);
+    const SCRIPT_CONFIGS = configSheet ? loadConfigurationsFromSheetObject(configSheet) : {};
+    
+    // Use helper to get values or defaults
     const config = {
-      roasFactorIndex: 1.5,     // ROAS must be > AccountAvg * this factor for INDEX
-      ordersThresholdIndex: 2,  // Orders must be > this for INDEX
-      roasFactorNearIndex: 1.0,   // ROAS must be > AccountAvg * this factor for NEAR-INDEX
-      roasFactorExclude: 0.6,   // ROAS must be < AccountAvg * this factor for EXCLUDE
-      costToPriceRatioExclude: 0.8, // Cost > Price * this factor for EXCLUDE
-      absoluteCostExclude: 50,  // OR Cost > this absolute value for EXCLUDE
+      roasFactorIndex: getConfigValue(SCRIPT_CONFIGS, "Index ROAS Factor", 'float', 1.5),
+      ordersThresholdIndex: getConfigValue(SCRIPT_CONFIGS, "Index Orders Threshold", 'int', 2),
+      roasFactorNearIndex: getConfigValue(SCRIPT_CONFIGS, "Near Index ROAS Factor", 'float', 1.0),
+      roasFactorExclude: getConfigValue(SCRIPT_CONFIGS, "Exclude ROAS Factor", 'float', 0.6),
+      costToPriceRatioExclude: getConfigValue(SCRIPT_CONFIGS, "Exclude Cost/Price Ratio", 'float', 0.8),
+      absoluteCostExclude: getConfigValue(SCRIPT_CONFIGS, "Exclude Absolute Cost", 'int', 50),
     };
-    Logger.log(`Performance Index Config: ROAS Factor (Index): ${config.roasFactorIndex}, Orders Threshold (Index): ${config.ordersThresholdIndex}`);
+    Logger.log(`Performance Index Config Loaded.`);
 
     // --- 2. Read Data and Get Column Indices ---
     const lastRow = metricsSheet.getLastRow();
@@ -66,8 +75,9 @@ function runPerformanceIndexLabel() {
     // --- 4. Process Products and Generate Labels ---
     const results = processProductsAndGetLabels_(data, columnIndices, config, accountAvgROAS);
 
-    // --- 5. Write Results to Sheet ---
-    writeResultsToSheet_(metricsSheet, results);
+    // --- 5. Write Results to LABELS FEED Sheet ---
+    const labelsSheet = getOrCreateSheet(spreadsheet, PERF_LABELS_SHEET_NAME);
+    writeResultsToSheet_(labelsSheet, results, SCRIPT_CONFIGS);
 
     Logger.log("Performance Index label calculation completed successfully.");
 
@@ -85,10 +95,10 @@ function runPerformanceIndexLabel() {
 function getColumnIndices_(headers) {
   const indices = {
     id: headers.indexOf("id"),
-    cost: headers.indexOf("cost"),
-    productPrice: headers.indexOf("Product Price"),
-    totalRevenue: headers.indexOf("Total Revenue"),
-    totalOrders: headers.indexOf("Total Orders"),
+    cost: headers.indexOf("Cost"),
+    productPrice: headers.indexOf("Price"),
+    totalRevenue: headers.indexOf("Revenue"),
+    totalOrders: headers.indexOf("Orders"),
   };
   
   const missing = Object.keys(indices).filter(key => indices[key] === -1);
@@ -196,15 +206,19 @@ function determinePerformanceLabel_(productROAS, orders, cost, price, config, ac
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet object to write to.
  * @param {Array<Array<string>>} results The 2D array of [roas, label] to write.
  */
-function writeResultsToSheet_(sheet, results) {
+function writeResultsToSheet_(sheet, results, config = {}) {
   if (results.length === 0) {
     Logger.log("No results were generated to write.");
     return;
   }
   
-  // Assumes CommonUtilities.gs findOrCreateHeaderColumn is available
-  const roasCol = findOrCreateHeaderColumn(sheet, "Site ROAS", PERF_HEADER_ROW_NUM);
-  const labelCol = findOrCreateHeaderColumn(sheet, "LABEL_PERFORMANCE_INDEX", PERF_HEADER_ROW_NUM);
+  // Resolve Dynamic Header Names
+  const roasHeaderName = getConfigValue(config, PERF_SITE_ROAS_HEADER, 'string', PERF_SITE_ROAS_HEADER);
+  const labelHeaderName = getConfigValue(config, PERF_OUTPUT_LABEL_HEADER, 'string', PERF_OUTPUT_LABEL_HEADER);
+  Logger.log(`Writing Labels using headers: "${roasHeaderName}", "${labelHeaderName}"`);
+  
+  const roasCol = findOrCreateHeaderColumn(sheet, roasHeaderName, PERF_HEADER_ROW_NUM);
+  const labelCol = findOrCreateHeaderColumn(sheet, labelHeaderName, PERF_HEADER_ROW_NUM);
 
   const roasValues = results.map(row => [row[0]]);
   const labelValues = results.map(row => [row[1]]);

@@ -18,11 +18,12 @@
 // --- Script-level Constants (with unique names) ---
 const REVENUE_CONFIG_SHEET_NAME = "Config";
 const REVENUE_METRICS_SHEET_NAME = "Metrics";
+const REVENUE_LABELS_SHEET_NAME = "Labels Feed";
 const REVENUE_HEADER_ROW_NUM = 1;
 
 // --- Column Headers (with unique names) ---
 const REVENUE_ID_INPUT_HEADER = "id";
-const REVENUE_TOTAL_INPUT_HEADER = "Total Revenue";
+const REVENUE_TOTAL_INPUT_HEADER = "Revenue";
 const REVENUE_ADVANCED_OUTPUT_HEADER = "LABEL_REVENUE_ADVANCED";
 const REVENUE_SIMPLE_OUTPUT_HEADER = "LABEL_REVENUE_SIMPLE";
 
@@ -74,8 +75,9 @@ function runRevenueLabels() {
     // --- 4. Generate Labels (Second Pass) ---
     const labels = generateRevenueLabels_(data, columnIndices, config, accountAverageRevenue);
 
-    // --- 5. Write Results to Sheet ---
-    writeRevenueLabelsToSheet_(metricsSheet, labels);
+    // --- 5. Write Results to LABELS FEED Sheet ---
+    const labelsSheet = getOrCreateSheet(spreadsheet, REVENUE_LABELS_SHEET_NAME);
+    writeRevenueLabelsToSheet_(labelsSheet, labels, SCRIPT_CONFIGS);
 
     Logger.log("Revenue label calculation completed successfully.");
 
@@ -187,14 +189,20 @@ function determineAdvancedRevenueLabel_(revenue, accountAverage, config) {
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet object to write to.
  * @param {Array<Array<string>>} labels The 2D array of labels to write.
  */
-function writeRevenueLabelsToSheet_(sheet, labels) {
+function writeRevenueLabelsToSheet_(sheet, labels, config = {}) {
   if (labels.length === 0) {
     Logger.log("No labels were generated to write.");
     return;
   }
   
-  const advancedCol = findOrCreateHeaderColumn(sheet, REVENUE_ADVANCED_OUTPUT_HEADER, REVENUE_HEADER_ROW_NUM);
-  const simpleCol = findOrCreateHeaderColumn(sheet, REVENUE_SIMPLE_OUTPUT_HEADER, REVENUE_HEADER_ROW_NUM);
+  // Resolve Dynamic Header Names
+  const advancedHeaderName = getConfigValue(config, REVENUE_ADVANCED_OUTPUT_HEADER, 'string', REVENUE_ADVANCED_OUTPUT_HEADER);
+  const simpleHeaderName = getConfigValue(config, REVENUE_SIMPLE_OUTPUT_HEADER, 'string', REVENUE_SIMPLE_OUTPUT_HEADER);
+  
+  Logger.log(`Writing Labels using headers: Advanced="${advancedHeaderName}", Simple="${simpleHeaderName}"`);
+
+  const advancedCol = findOrCreateHeaderColumn(sheet, advancedHeaderName, REVENUE_HEADER_ROW_NUM);
+  const simpleCol = findOrCreateHeaderColumn(sheet, simpleHeaderName, REVENUE_HEADER_ROW_NUM);
 
   const advancedLabels = labels.map(row => [row[0]]);
   const simpleLabels = labels.map(row => [row[1]]);

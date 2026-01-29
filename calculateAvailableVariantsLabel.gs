@@ -16,7 +16,9 @@
  */
 
 // --- Script-level Constants (with unique names) ---
+const VARIANTS_CONFIG_SHEET_NAME = "Config";
 const VARIANTS_METRICS_SHEET_NAME = "Metrics";
+const VARIANTS_LABELS_SHEET_NAME = "Labels Feed";
 const VARIANTS_HEADER_ROW_NUM = 1;
 
 // --- Column Headers (with unique names) ---
@@ -33,6 +35,11 @@ const VARIANTS_IN_STOCK_TEXTS = ["instock", "in stock"];
 function runAvailableVariantsLabel() {
   try {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // --- 0. Load Configuration (Added for dynamic headers) ---
+    const configSheet = spreadsheet.getSheetByName(VARIANTS_CONFIG_SHEET_NAME);
+    const SCRIPT_CONFIGS = configSheet ? loadConfigurationsFromSheetObject(configSheet) : {};
+
     const metricsSheet = spreadsheet.getSheetByName(VARIANTS_METRICS_SHEET_NAME);
     if (!metricsSheet) {
       throw new Error(`Sheet "${VARIANTS_METRICS_SHEET_NAME}" was not found.`);
@@ -62,8 +69,9 @@ function runAvailableVariantsLabel() {
     // --- 3. Generate Labels (Second Pass) ---
     const labels = generateVariantLabels_(data, columnIndices, parentStats);
 
-    // --- 4. Write Results to Sheet ---
-    writeVariantLabelsToSheet_(metricsSheet, labels);
+    // --- 4. Write Results to LABELS FEED Sheet ---
+    const labelsSheet = getOrCreateSheet(spreadsheet, VARIANTS_LABELS_SHEET_NAME);
+    writeVariantLabelsToSheet_(labelsSheet, labels, SCRIPT_CONFIGS);
 
     Logger.log("Available Variants label calculation completed successfully.");
 
@@ -166,14 +174,17 @@ function generateVariantLabels_(data, columnIndices, parentStats) {
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet object to write to.
  * @param {Array<Array<string>>} labels The 2D array of labels to write.
  */
-function writeVariantLabelsToSheet_(sheet, labels) {
+function writeVariantLabelsToSheet_(sheet, labels, config = {}) {
   if (labels.length === 0) {
     Logger.log("No labels were generated to write.");
     return;
   }
   
-  // Assumes CommonUtilities.gs findOrCreateHeaderColumn is available
-  const outputCol = findOrCreateHeaderColumn(sheet, VARIANTS_OUTPUT_LABEL_HEADER, VARIANTS_HEADER_ROW_NUM);
+  // Resolve Dynamic Header Name
+  const headerName = getConfigValue(config, VARIANTS_OUTPUT_LABEL_HEADER, 'string', VARIANTS_OUTPUT_LABEL_HEADER);
+  Logger.log(`Writing Labels using header: "${headerName}"`);
+
+  const outputCol = findOrCreateHeaderColumn(sheet, headerName, VARIANTS_HEADER_ROW_NUM);
 
   // Use the chunked writer from CommonUtilities.gs
   writeValuesToSheetSafe(sheet, VARIANTS_HEADER_ROW_NUM + 1, outputCol, labels);

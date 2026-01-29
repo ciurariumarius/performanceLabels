@@ -16,6 +16,7 @@
 // --- Script-level Constants (with unique names) ---
 const NEW_PROD_CONFIG_SHEET_NAME = "Config";
 const NEW_PROD_METRICS_SHEET_NAME = "Metrics";
+const NEW_PROD_LABELS_SHEET_NAME = "Labels Feed";
 const NEW_PROD_HEADER_ROW_NUM = 1;
 
 // --- Column Headers (with unique names) ---
@@ -73,7 +74,8 @@ function runNewProductLabelCalculation() {
     const labels = generateNewProductLabels_(data, columnIndices, newProductDays);
 
     // --- 4. Write Results to Sheet ---
-    writeNewProductLabelsToSheet_(metricsSheet, labels);
+    const labelsSheet = getOrCreateSheet(spreadsheet, NEW_PROD_LABELS_SHEET_NAME);
+    writeNewProductLabelsToSheet_(labelsSheet, labels, SCRIPT_CONFIGS);
 
     Logger.log("New Product label calculation completed successfully.");
 
@@ -150,14 +152,17 @@ function generateNewProductLabels_(data, columnIndices, newProductDays) {
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet object to write to.
  * @param {Array<Array<string>>} labels The 2D array of labels to write.
  */
-function writeNewProductLabelsToSheet_(sheet, labels) {
+function writeNewProductLabelsToSheet_(sheet, labels, config = {}) {
   if (labels.length === 0) {
     Logger.log("No labels were generated to write.");
     return;
   }
   
-  // Assumes CommonUtilities.gs findOrCreateHeaderColumn is available
-  const outputCol = findOrCreateHeaderColumn(sheet, NEW_PROD_OUTPUT_LABEL_HEADER, NEW_PROD_HEADER_ROW_NUM);
+  // Resolve Dynamic Header Name
+  const headerName = getConfigValue(config, NEW_PROD_OUTPUT_LABEL_HEADER, 'string', NEW_PROD_OUTPUT_LABEL_HEADER);
+  Logger.log(`Writing Labels using header: "${headerName}"`);
+
+  const outputCol = findOrCreateHeaderColumn(sheet, headerName, NEW_PROD_HEADER_ROW_NUM);
 
   // Use the chunked writer from CommonUtilities.gs
   writeValuesToSheetSafe(sheet, NEW_PROD_HEADER_ROW_NUM + 1, outputCol, labels);

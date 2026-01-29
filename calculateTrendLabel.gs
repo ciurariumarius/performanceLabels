@@ -16,13 +16,15 @@
 // --- Script-level Constants (with unique names) ---
 const TREND_CONFIG_SHEET_NAME = "Config";
 const TREND_METRICS_SHEET_NAME = "Metrics";
+const TREND_LABELS_SHEET_NAME = "Labels Feed";
 const TREND_HEADER_ROW_NUM = 1;
 
 // --- Column Headers (with unique names) ---
 const TREND_ID_INPUT_HEADER = "id";
-const TREND_TOTAL_REVENUE_HEADER = "Total Revenue";
-const TREND_14_DAY_REVENUE_HEADER = "Revenue last 14 days";
-const TREND_ORDERS_INPUT_HEADER = "Total Orders";
+const TREND_TOTAL_REVENUE_HEADER = "Revenue";
+// NOTE: 'Revenue last 14 days' is NOT in Metrics consolidation yet. This label will fail until source data includes it.
+const TREND_14_DAY_REVENUE_HEADER = "Revenue last 14 days"; 
+const TREND_ORDERS_INPUT_HEADER = "Orders";
 const TREND_OUTPUT_LABEL_HEADER = "LABEL_TREND";
 
 // --- Trend Threshold Configuration ---
@@ -74,8 +76,9 @@ function runTrendLabelCalculation() {
     // --- 3. Generate Labels ---
     const labels = generateTrendLabels_(data, columnIndices, timeframeDays, orderThreshold);
 
-    // --- 4. Write Results to Sheet ---
-    writeTrendLabelsToSheet_(metricsSheet, labels);
+    // --- 4. Write Results to LABELS FEED Sheet ---
+    const labelsSheet = getOrCreateSheet(spreadsheet, TREND_LABELS_SHEET_NAME);
+    writeTrendLabelsToSheet_(labelsSheet, labels, SCRIPT_CONFIGS);
 
     Logger.log("Trend label calculation completed successfully.");
 
@@ -198,19 +201,18 @@ function applyOrderThresholdToTrend_(potentialTrend, totalOrders, orderThreshold
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet object to write to.
  * @param {Array<Array<string>>} labels The 2D array of labels to write.
  */
-function writeTrendLabelsToSheet_(sheet, labels) {
+function writeTrendLabelsToSheet_(sheet, labels, config = {}) {
   if (labels.length === 0) {
     Logger.log("No labels were generated to write.");
     return;
   }
   
-  // Assumes CommonUtilities.gs findOrCreateHeaderColumn is available
-  const outputCol = findOrCreateHeaderColumn(sheet, TREND_OUTPUT_LABEL_HEADER, TREND_HEADER_ROW_NUM);
-
-  // Calculate total rows to process
-  // Note: We don't clear the entire column because usually the row count matches the input data.
-  // If we needed to clear, we'd do it before this function or inside a separate clear step.
+  // Resolve Dynamic Header Name
+  const headerName = getConfigValue(config, TREND_OUTPUT_LABEL_HEADER, 'string', TREND_OUTPUT_LABEL_HEADER);
+  Logger.log(`Writing Labels using header: "${headerName}"`);
   
+  const outputCol = findOrCreateHeaderColumn(sheet, headerName, TREND_HEADER_ROW_NUM);
+
   // Use the chunked writer from CommonUtilities.gs
   writeValuesToSheetSafe(sheet, TREND_HEADER_ROW_NUM + 1, outputCol, labels);
   

@@ -17,12 +17,13 @@
 // --- Script-level Constants (with unique names) ---
 const ORDERS_CONFIG_SHEET_NAME = "Config";
 const ORDERS_METRICS_SHEET_NAME = "Metrics";
+const ORDERS_LABELS_SHEET_NAME = "Labels Feed";
 const ORDERS_HEADER_ROW_NUM = 1;
 
 // --- Column Headers (with unique names) ---
 const ORDERS_ID_INPUT_HEADER = "id";
-const ORDERS_COUNT_INPUT_HEADER = "Total Orders";
-const ORDERS_REVENUE_INPUT_HEADER = "Total Revenue";
+const ORDERS_COUNT_INPUT_HEADER = "Orders";
+const ORDERS_REVENUE_INPUT_HEADER = "Revenue";
 const ORDERS_OUTPUT_LABEL_HEADER = "LABEL_ORDERS";
 
 /**
@@ -66,8 +67,9 @@ function runOrdersLabel() {
     // --- 3. Generate Labels ---
     const labels = generateOrderLabels_(data, columnIndices, orderThreshold);
 
-    // --- 4. Write Results to Sheet ---
-    writeOrderLabelsToSheet_(metricsSheet, labels);
+    // --- 4. Write Results to LABELS FEED Sheet ---
+    const labelsSheet = getOrCreateSheet(spreadsheet, ORDERS_LABELS_SHEET_NAME);
+    writeOrderLabelsToSheet_(labelsSheet, labels, SCRIPT_CONFIGS);
 
     Logger.log("Orders label calculation completed successfully.");
 
@@ -156,14 +158,17 @@ function determineOrderLabel_(orders, revenue, threshold) {
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet object to write to.
  * @param {Array<Array<string>>} labels The 2D array of labels to write.
  */
-function writeOrderLabelsToSheet_(sheet, labels) {
+function writeOrderLabelsToSheet_(sheet, labels, config = {}) {
   if (labels.length === 0) {
     Logger.log("No labels were generated to write.");
     return;
   }
   
-  // Assumes CommonUtilities.gs findOrCreateHeaderColumn is available
-  const outputCol = findOrCreateHeaderColumn(sheet, ORDERS_OUTPUT_LABEL_HEADER, ORDERS_HEADER_ROW_NUM);
+  // Resolve Dynamic Header Name
+  const headerName = getConfigValue(config, ORDERS_OUTPUT_LABEL_HEADER, 'string', ORDERS_OUTPUT_LABEL_HEADER);
+  Logger.log(`Writing Labels using header: "${headerName}"`);
+
+  const outputCol = findOrCreateHeaderColumn(sheet, headerName, ORDERS_HEADER_ROW_NUM);
 
   // Use the chunked writer from CommonUtilities.gs
   writeValuesToSheetSafe(sheet, ORDERS_HEADER_ROW_NUM + 1, outputCol, labels);

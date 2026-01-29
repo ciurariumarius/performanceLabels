@@ -17,11 +17,12 @@
 // --- Script-level Constants (with unique names) ---
 const PRICE_CONFIG_SHEET_NAME = "Config";
 const PRICE_METRICS_SHEET_NAME = "Metrics";
+const PRICE_LABELS_SHEET_NAME = "Labels Feed";
 const PRICE_HEADER_ROW_NUM = 1;
 
 // --- Column Headers (with unique names) ---
 const PRICE_ID_INPUT_HEADER = "id";
-const PRICE_INPUT_HEADER = "Product Price";
+const PRICE_INPUT_HEADER = "Price";
 const PRICE_OUTPUT_LABEL_HEADER = "LABEL_PRICE_INTERVAL";
 
 /**
@@ -69,8 +70,9 @@ function runPriceLabels() {
     // --- 3. Generate Labels ---
     const labels = generatePriceLabels_(data, columnIndices, priceIntervalStep);
 
-    // --- 4. Write Results to Sheet ---
-    writePriceLabelsToSheet_(metricsSheet, labels);
+    // --- 4. Write Results to LABELS FEED Sheet ---
+    const labelsSheet = getOrCreateSheet(spreadsheet, PRICE_LABELS_SHEET_NAME);
+    writePriceLabelsToSheet_(labelsSheet, labels, SCRIPT_CONFIGS);
 
     Logger.log("Price interval label calculation completed successfully.");
 
@@ -145,14 +147,17 @@ function determinePriceIntervalLabel_(price, step) {
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet object to write to.
  * @param {Array<Array<string>>} labels The 2D array of labels to write.
  */
-function writePriceLabelsToSheet_(sheet, labels) {
+function writePriceLabelsToSheet_(sheet, labels, config = {}) {
   if (labels.length === 0) {
     Logger.log("No labels were generated to write.");
     return;
   }
   
-  // Assumes CommonUtilities.gs findOrCreateHeaderColumn is available
-  const outputCol = findOrCreateHeaderColumn(sheet, PRICE_OUTPUT_LABEL_HEADER, PRICE_HEADER_ROW_NUM);
+  // Resolve Dynamic Header Name
+  const headerName = getConfigValue(config, PRICE_OUTPUT_LABEL_HEADER, 'string', PRICE_OUTPUT_LABEL_HEADER);
+  Logger.log(`Writing Labels using header: "${headerName}"`);
+
+  const outputCol = findOrCreateHeaderColumn(sheet, headerName, PRICE_HEADER_ROW_NUM);
 
   // Use the chunked writer from CommonUtilities.gs
   writeValuesToSheetSafe(sheet, PRICE_HEADER_ROW_NUM + 1, outputCol, labels);

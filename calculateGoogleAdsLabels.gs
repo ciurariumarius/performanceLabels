@@ -8,6 +8,7 @@
 // --- Constants ---
 const GADS_CONFIG_SHEET_NAME = "Config";
 const GADS_DATA_SHEET_NAME = "Metrics"; // The sheet where raw data lands
+const GADS_LABELS_SHEET_NAME = "Labels Feed";
 const GADS_HEADER_ROW_NUM = 1;
 
 // Thresholds
@@ -29,9 +30,10 @@ function runGoogleAdsLabelCalculation() {
     const configSheet = spreadsheet.getSheetByName(GADS_CONFIG_SHEET_NAME);
     if (!configSheet) throw new Error(`Sheet "${GADS_CONFIG_SHEET_NAME}" not found.`);
     
-    // We use the helper directly or load specific cells if CommonUtilities layout differs.
-    // Assuming the layout from your previous code snippet:
-    // B6: ROAS_GOOD, B7: ROAS_BAD, B8: CVR_GOOD, B9: CVR_BAD, B10: CLICKS_HIGH, B11: CLICKS_LOW
+    // Load full Key-Value pairs for dynamic headers
+    const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(configSheet);
+
+    // Keep existing threshold loading logic (specific cells)
     const config = {
       roasGood: parseFloatSafe(configSheet.getRange("B6").getValue(), 4.0),
       roasBad: parseFloatSafe(configSheet.getRange("B7").getValue(), 2.0),
@@ -61,8 +63,9 @@ function runGoogleAdsLabelCalculation() {
     // 3. Process & Generate Labels
     const labels = data.map(row => calculateRowLabels_(row, indices, config));
 
-    // 4. Write Labels
-    writeGAdsLabelsToSheet_(dataSheet, labels);
+    // 4. Write Labels to Labels Feed Sheet
+    const labelsSheet = getOrCreateSheet(spreadsheet, GADS_LABELS_SHEET_NAME);
+    writeGAdsLabelsToSheet_(labelsSheet, labels, SCRIPT_CONFIGS);
     Logger.log("Google Ads label calculation completed.");
 
   } catch (e) {
@@ -131,13 +134,19 @@ function calculateRowLabels_(row, indices, config) {
 /**
  * Writes the calculated labels back to the sheet.
  */
-function writeGAdsLabelsToSheet_(sheet, labels) {
-  const roasCol = findOrCreateHeaderColumn(sheet, HEADER_LABEL_ROAS, GADS_HEADER_ROW_NUM);
-  const cvrCol = findOrCreateHeaderColumn(sheet, HEADER_LABEL_CVR, GADS_HEADER_ROW_NUM);
-  const clicksCol = findOrCreateHeaderColumn(sheet, HEADER_LABEL_CLICKS, GADS_HEADER_ROW_NUM);
+function writeGAdsLabelsToSheet_(sheet, labels, config = {}) {
+  // Resolve Dynamic Header Names
+  const roasHeader = getConfigValue(config, HEADER_LABEL_ROAS, 'string', HEADER_LABEL_ROAS);
+  const cvrHeader = getConfigValue(config, HEADER_LABEL_CVR, 'string', HEADER_LABEL_CVR);
+  const clicksHeader = getConfigValue(config, HEADER_LABEL_CLICKS, 'string', HEADER_LABEL_CLICKS);
+  
+  Logger.log(`Writing GAds Labels using headers: ${roasHeader}, ${cvrHeader}, ${clicksHeader}`);
+
+  const roasCol = findOrCreateHeaderColumn(sheet, roasHeader, GADS_HEADER_ROW_NUM);
+  const cvrCol = findOrCreateHeaderColumn(sheet, cvrHeader, GADS_HEADER_ROW_NUM);
+  const clicksCol = findOrCreateHeaderColumn(sheet, clicksHeader, GADS_HEADER_ROW_NUM);
 
   const numRows = labels.length;
-  // Write column by column
   // Write column by column safely
   writeValuesToSheetSafe(sheet, GADS_HEADER_ROW_NUM + 1, roasCol, labels.map(r => [r[0]]));
   writeValuesToSheetSafe(sheet, GADS_HEADER_ROW_NUM + 1, cvrCol, labels.map(r => [r[1]]));
