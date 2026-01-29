@@ -309,6 +309,14 @@ function processShopifyBatchCore_() {
       logShopifyStatus_("COMPLETED", "Finished successfully.");
       resetShopifyScript_();
       scriptProperties.setProperty('SHOPIFY_WORKER_STATUS', 'IDLE');
+      
+      // Daisy-chain: Run Label Calculations immediately after data is ready
+      try {
+        Logger.log("Triggering Label Calculations...");
+        runAllLabelCalculations(); 
+      } catch (e) {
+        console.error("Failed to trigger labels: " + e.message);
+      }
       return;
     }
 
@@ -386,21 +394,17 @@ function logShopifyStatus_(status, message) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = getOrCreateSheet(ss, SHOPIFY_ACCOUNT_SHEET_NAME); 
-    const range = sheet.getRange("J8:K12"); // Below WooCommerce Status?
-    // Let's put it below Row 6 (Woo uses J2:K6)
-    // Actually, to avoid overlap, let's use M2:N6 for Shopify?
-    // Or just stack them. Let's use M2:N6 for Shopify to keep them side-by-side.
-    const targetRange = sheet.getRange("M2:N6");
+    const range = sheet.getRange("R2:S6"); // Moved to R:S
     
-    targetRange.setBorder(true, true, true, true, true, true);
-    targetRange.setValues([
+    range.setBorder(true, true, true, true, true, true);
+    range.setValues([
       ["SHOPIFY STATUS", status],
       ["MESSAGE", message],
       ["LAST UPDATE", new Date().toLocaleTimeString()],
       ["", ""],
       ["NOTE", "Refreshes every 5 mins"]
     ]);
-    const statusCell = sheet.getRange("N2");
+    const statusCell = sheet.getRange("S2");
     if (status === "ERROR") statusCell.setBackground("#FFCCCC");
     else if (status === "COMPLETED") statusCell.setBackground("#CCFFCC");
     else statusCell.setBackground("#CCFFFF");

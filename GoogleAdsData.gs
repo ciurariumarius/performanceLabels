@@ -102,22 +102,35 @@ function upsertAccountDataRow(spreadsheet, sheetName, data) {
   const headers = ["Timestamp", "Source", "Timeframe", "Revenue", "Cost", "Orders", "OOS w/ Sales (#)", "OOS w/ Sales (%)"];
   
   // Robust Header Check
-  let headerCheck = "";
-  if (sheet.getLastRow() > 0) headerCheck = sheet.getRange(1, 1).getValue();
+  const headerRange = sheet.getRange(1, 1, 1, headers.length);
+  const headerValues = headerRange.getValues()[0];
   
-  if (headerCheck !== headers[0] || sheet.getLastRow() === 0) {
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold").setHorizontalAlignment("center");
+  if (headerValues[0] !== headers[0]) {
+    headerRange.setValues([headers]).setFontWeight("bold").setHorizontalAlignment("center");
   }
   
-  const lastRow = sheet.getLastRow();
+  // Determine the last row with data based on Column B (Source)
+  const lastRow = sheet.getLastRow(); // Physical last row
+  let dataLastRow = 1; // Default to header
+  
+  if (lastRow > 1) {
+    const sourceValues = sheet.getRange(2, 2, lastRow - 1, 1).getValues().flat();
+    for (let i = sourceValues.length - 1; i >= 0; i--) {
+      if (sourceValues[i] !== "") {
+        dataLastRow = i + 2;
+        break;
+      }
+    }
+  }
+
   let targetRow = -1;
   
-  // Search for existing source in Column B (Index 1)
-  if (lastRow > 1) {
-    const sourceColumn = sheet.getRange(2, 2, lastRow - 1, 1).getValues().flat(); // Get all sources
-    const rowIndex = sourceColumn.indexOf(data.source);
+  // Search for existing source
+  if (dataLastRow > 1) {
+    const sourceValues = sheet.getRange(2, 2, dataLastRow - 1, 1).getValues().flat();
+    const rowIndex = sourceValues.indexOf(data.source);
     if (rowIndex !== -1) {
-      targetRow = rowIndex + 2; // +2 because 0-index + 1 header + 1 for 1-based index
+      targetRow = rowIndex + 2;
     }
   }
   
@@ -142,7 +155,8 @@ function upsertAccountDataRow(spreadsheet, sheetName, data) {
     sheet.getRange(targetRow, 1, 1, rowData.length).setValues([rowData]);
   } else {
     // append new
-    sheet.appendRow(rowData);
+    const newRow = dataLastRow + 1;
+    sheet.getRange(newRow, 1, 1, rowData.length).setValues([rowData]);
   }
 }
 

@@ -325,6 +325,14 @@ function processBatchCore_() {
       logStatus_("COMPLETED", `Finished at ${new Date().toLocaleTimeString()}`);
       resetScript_(); // Cleanup
       scriptProperties.setProperty('WOO_WORKER_STATUS', 'IDLE'); 
+      
+      // Daisy-chain: Run Label Calculations immediately after data is ready
+      try {
+        Logger.log("Triggering Label Calculations...");
+        runAllLabelCalculations(); 
+      } catch (e) {
+        console.error("Failed to trigger labels: " + e.message);
+      }
       return;
     }
 
@@ -350,8 +358,8 @@ function logStatus_(status, message) {
     // Move status logging to AccountData sheet as requested
     const sheet = getOrCreateSheet(ss, WOO_ACCOUNT_SHEET_NAME); 
     
-    // Using range J2:K6 to sit to the right of standard columns (A-H)
-    const range = sheet.getRange("J2:K6"); 
+    // Using range O2:P6 to sit to the right of standard columns (and moved right)
+    const range = sheet.getRange("O2:P6"); 
       range.setBorder(true, true, true, true, true, true);
       range.setValues([
         ["WOO WORKER STATUS", status],
@@ -360,7 +368,7 @@ function logStatus_(status, message) {
         ["", ""],
         ["NOTE", "Refreshes every 5 mins"]
       ]);
-      const statusCell = sheet.getRange("K2");
+      const statusCell = sheet.getRange("P2");
       if (status === "ERROR") statusCell.setBackground("#FFCCCC");
       else if (status === "COMPLETED") statusCell.setBackground("#CCFFCC");
       else statusCell.setBackground("#CCFFFF");

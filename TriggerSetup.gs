@@ -33,12 +33,10 @@ function setupWooCommerceComplete() {
     .everyMinutes(5)
     .create();
     
-  // 4. Labels (Daily 6am)
-  ScriptApp.newTrigger('runAllLabelCalculations')
-    .timeBased()
-    .everyDays(1)
-    .atHour(6)
-    .create();
+  /*
+  // 4. Labels (Daisy-chained now)
+  // The data scripts will call runAllLabelCalculations() automatically when done.
+  */
 
   const msg = "✅ WooCommerce Complete Setup Done (Data + Labels).";
   console.log(msg);
@@ -82,12 +80,10 @@ function setupShopifyComplete() {
     .everyMinutes(5)
     .create();
     
-  // 4. Labels (Daily 6am)
-  ScriptApp.newTrigger('runAllLabelCalculations')
-    .timeBased()
-    .everyDays(1)
-    .atHour(6)
-    .create();
+  /* 
+  // 4. Labels (Daisy-chained now - no longer needed as time-based)
+  // The data scripts (Shopify/Woo) will call runAllLabelCalculations() automatically when done.
+  */
 
   const msg = "✅ Shopify Complete Setup Done (Data + Labels).";
   console.log(msg);

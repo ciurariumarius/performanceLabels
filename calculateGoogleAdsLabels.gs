@@ -7,7 +7,7 @@
 
 // --- Constants ---
 const GADS_CONFIG_SHEET_NAME = "Config";
-const GADS_DATA_SHEET_NAME = "GAds"; // The sheet where raw data lands
+const GADS_DATA_SHEET_NAME = "Metrics"; // The sheet where raw data lands
 const GADS_HEADER_ROW_NUM = 1;
 
 // Thresholds
@@ -74,7 +74,9 @@ function runGoogleAdsLabelCalculation() {
  * Helper to get column indices for raw metrics.
  */
 function getGAdsColumnIndices_(headers) {
-  // Headers pushed by GoogleAdsData.gs: ["id", "Title", "Type L1", "Impressions", "Clicks", "Cost", "Conversions", "Conv Value"]
+  // Headers in Metrics Sheet: 
+  // "id", "Title", "Price", "Revenue", "Orders", "Stock Status", "Stock Qty", 
+  // "Impressions", "Clicks", "Cost", "Conversions", "Conv Value", "Calculated On"
   return {
     clicks: headers.indexOf("Clicks"),
     impressions: headers.indexOf("Impressions"),
@@ -101,14 +103,18 @@ function calculateRowLabels_(row, indices, config) {
 
   // 1. ROAS Label
   let labelRoas = "avg_roas";
-  if (clicks >= MIN_CLICKS_THRESHOLD) {
+  if (conversionValue === 0) {
+    labelRoas = "no_roas";
+  } else if (clicks >= MIN_CLICKS_THRESHOLD) {
     if (roas >= config.roasGood) labelRoas = "high_roas";
     else if (roas < config.roasBad) labelRoas = "low_roas";
   }
 
   // 2. CVR Label
   let labelCvr = "avg_cvr";
-  if (clicks >= MIN_CLICKS_THRESHOLD) {
+  if (conversions === 0) {
+    labelCvr = "no_cvr";
+  } else if (clicks >= MIN_CLICKS_THRESHOLD) {
     if (conversions >= 1 && cvr >= config.cvrGood) labelCvr = "high_cvr";
     else if (cvr < config.cvrBad) labelCvr = "low_cvr";
   }
