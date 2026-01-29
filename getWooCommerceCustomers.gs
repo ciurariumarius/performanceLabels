@@ -104,7 +104,7 @@ function resetCustomerFromOrdersProgress() {
   scriptProperties.deleteProperty('CUST_TEMP_CUSTOMER_MAP');
   scriptProperties.deleteProperty('CUST_LAST_SUCCESSFUL_SYNC'); // Critical for re-sync
   Logger.log('Full reset complete. The next run will be a full sync from the beginning.');
-  _cust_getOrCreateSheet(SpreadsheetApp.getActiveSpreadsheet(), CUST_ALL_CUSTOMERS_SHEET_NAME).clear();
+  getOrCreateSheet(SpreadsheetApp.getActiveSpreadsheet(), CUST_ALL_CUSTOMERS_SHEET_NAME).clear();
   Logger.log(`Sheet "${CUST_ALL_CUSTOMERS_SHEET_NAME}" has been cleared.`);
 }
 
