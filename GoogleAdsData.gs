@@ -109,8 +109,11 @@ function upsertAccountDataRow(spreadsheet, sheetName, data) {
   // Headers
   const headers = ["Timestamp", "Source", "Timeframe", "Revenue", "Cost", "Orders", "OOS w/ Sales (#)", "OOS w/ Sales (%)"];
   
-  // Ensure headers exist
-  if (sheet.getLastRow() === 0) {
+  // Robust Header Check
+  let headerCheck = "";
+  if (sheet.getLastRow() > 0) headerCheck = sheet.getRange(1, 1).getValue();
+  
+  if (headerCheck !== headers[0] || sheet.getLastRow() === 0) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold").setHorizontalAlignment("center");
   }
   

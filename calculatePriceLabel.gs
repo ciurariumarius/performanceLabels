@@ -154,9 +154,8 @@ function writePriceLabelsToSheet_(sheet, labels) {
   // Assumes CommonUtilities.gs findOrCreateHeaderColumn is available
   const outputCol = findOrCreateHeaderColumn(sheet, PRICE_OUTPUT_LABEL_HEADER, PRICE_HEADER_ROW_NUM);
 
-  const range = sheet.getRange(PRICE_HEADER_ROW_NUM + 1, outputCol, labels.length, 1);
-  range.clearContent();
-  range.setValues(labels);
+  // Use the chunked writer from CommonUtilities.gs
+  writeValuesToSheetSafe(sheet, PRICE_HEADER_ROW_NUM + 1, outputCol, labels);
   
   Logger.log(`Wrote ${labels.length} price interval labels to the sheet.`);
 }

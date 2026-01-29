@@ -165,9 +165,8 @@ function writeOrderLabelsToSheet_(sheet, labels) {
   // Assumes CommonUtilities.gs findOrCreateHeaderColumn is available
   const outputCol = findOrCreateHeaderColumn(sheet, ORDERS_OUTPUT_LABEL_HEADER, ORDERS_HEADER_ROW_NUM);
 
-  const range = sheet.getRange(ORDERS_HEADER_ROW_NUM + 1, outputCol, labels.length, 1);
-  range.clearContent();
-  range.setValues(labels);
+  // Use the chunked writer from CommonUtilities.gs
+  writeValuesToSheetSafe(sheet, ORDERS_HEADER_ROW_NUM + 1, outputCol, labels);
   
   Logger.log(`Wrote ${labels.length} order volume labels to the sheet.`);
 }

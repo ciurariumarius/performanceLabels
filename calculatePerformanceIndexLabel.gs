@@ -209,17 +209,9 @@ function writeResultsToSheet_(sheet, results) {
   const roasValues = results.map(row => [row[0]]);
   const labelValues = results.map(row => [row[1]]);
 
-  // Clear previous content before writing for the exact number of rows processed
-  const rangeToClear = sheet.getRange(PERF_HEADER_ROW_NUM + 1, 1, results.length, sheet.getMaxColumns());
-  const roasRange = rangeToClear.offset(0, roasCol - 1, results.length, 1);
-  const labelRange = rangeToClear.offset(0, labelCol - 1, results.length, 1);
-
-  roasRange.clearContent();
-  labelRange.clearContent();
-
-  // Write new values
-  roasRange.setValues(roasValues);
-  labelRange.setValues(labelValues);
+  // Write new values in chunks
+  writeValuesToSheetSafe(sheet, PERF_HEADER_ROW_NUM + 1, roasCol, roasValues);
+  writeValuesToSheetSafe(sheet, PERF_HEADER_ROW_NUM + 1, labelCol, labelValues);
   
   Logger.log(`Wrote ${results.length} performance labels and ROAS values to the sheet.`);
 }

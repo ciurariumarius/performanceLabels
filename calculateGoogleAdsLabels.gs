@@ -132,7 +132,8 @@ function writeGAdsLabelsToSheet_(sheet, labels) {
 
   const numRows = labels.length;
   // Write column by column
-  sheet.getRange(GADS_HEADER_ROW_NUM + 1, roasCol, numRows, 1).setValues(labels.map(r => [r[0]]));
-  sheet.getRange(GADS_HEADER_ROW_NUM + 1, cvrCol, numRows, 1).setValues(labels.map(r => [r[1]]));
-  sheet.getRange(GADS_HEADER_ROW_NUM + 1, clicksCol, numRows, 1).setValues(labels.map(r => [r[2]]));
+  // Write column by column safely
+  writeValuesToSheetSafe(sheet, GADS_HEADER_ROW_NUM + 1, roasCol, labels.map(r => [r[0]]));
+  writeValuesToSheetSafe(sheet, GADS_HEADER_ROW_NUM + 1, cvrCol, labels.map(r => [r[1]]));
+  writeValuesToSheetSafe(sheet, GADS_HEADER_ROW_NUM + 1, clicksCol, labels.map(r => [r[2]]));
 }

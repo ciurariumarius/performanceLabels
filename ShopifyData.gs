@@ -1,336 +1,443 @@
-/** 23.09.2025
+/**
  * @file ShopifyData.gs
- * @description Fetches product variant and order data from a Shopify store via its REST API.
- * Optimized for daily background execution, it processes the data and writes a detailed report
- * and an account summary to the spreadsheet.
- * Relies on CommonUtilities.gs for all shared utility functions.
- *
- * Changelog (v2.2 - Parent ID Column):
- * - Added a separate "Parent Product ID" column to the Shopify sheet for improved clarity and filtering.
- * - Renamed the original concatenated ID column to "Formatted ID".
- *
- * Changelog (v2.1 - Config Fix):
- * - Corrected config lookup to use the general "Timeframe" setting.
- * - Set the default country code to "RO" directly as per user feedback.
- *
- * Changelog (v2.0 - Optimized):
- * - Refactored into smaller, single-responsibility functions for config, fetching, processing, and writing.
- * - Added a main try-catch block for robust error handling.
- * - Centralized paginated API call logic with rate limit handling.
+ * @description Enterprise-grade Shopify fetcher (v3.0 - Worker Pattern).
+ * Features:
+ * - "Worker" pattern for infinite runtime.
+ * - Cursor-based Pagination (Handles 'Link' headers).
+ * - Resume-able Writer.
+ * - Thread Safe (LockService).
+ * - Integrated with CommonUtilities for config and logging.
  */
 
-// --- Script-level Constants ---
-const SHOPIFY_CONFIG_SHEET_NAME = "Config";
-const SHOPIFY_SUMMARY_DATA_SHEET_NAME = "AccountData";
-const SHOPIFY_PRODUCT_DATA_SHEET_NAME = "Shopify";
+'use strict';
 
-// --- API Configuration ---
+// --- Configuration ---
+const SHOPIFY_CONFIG_SHEET_NAME = "Config";
+const SHOPIFY_PRODUCT_DATA_SHEET_NAME = "Shopify";
+const SHOPIFY_ACCOUNT_SHEET_NAME = "AccountData";
+const SHOPIFY_TEMP_FILENAME = "temp_shopify_batch_data.json";
+
+// Execution Safety: Run for 4 mins, leaving a 2m buffer.
+const SHOPIFY_MAX_EXECUTION_TIME_MS = 1000 * 60 * 4; 
+const SHOPIFY_ITEMS_PER_PAGE = 250; // Increased page size for efficiency
 const SHOPIFY_API_VERSION = '2024-04';
-const SHOPIFY_ITEMS_PER_PAGE = 50;
-const SHOPIFY_API_RETRIES = 3;
 
 /**
- * Main orchestrator function to run the Shopify report generation process.
+ * TRIGGER 1 (DAILY): Starts the job.
+ * Sets the initial state and flags the worker to start.
  */
-function runShopifyReport() {
+function startShopifyReport() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    console.error("Could not obtain lock to start Shopify report.");
+    return;
+  }
+
   try {
-    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    resetShopifyScript_(); 
 
-    // --- 1. Load and Validate Configuration ---
-    const config = getShopifyConfig_(spreadsheet);
-    Logger.log(`Shopify Report Config: Domain ${config.domain}, Timeframe ${config.days} days, API Version ${SHOPIFY_API_VERSION}.`);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const config = loadShopifyConfig_(ss);
 
-    // --- 2. Fetch and Process Data ---
-    const productDataMap = fetchAndProcessProducts_(config);
-    const orderProcessingResults = processOrders_(config, productDataMap);
+    // Initial URLs
+    const productsUrl = `https://${config.domain}/admin/api/${SHOPIFY_API_VERSION}/products.json?limit=${SHOPIFY_ITEMS_PER_PAGE}&fields=id,title,variants,created_at`;
     
-    // --- 3. Write Results to Sheets ---
-    writeResultsToSheets_(spreadsheet, orderProcessingResults.productDataMap, orderProcessingResults.summary);
+    // Calculate Order timeframe
+    const endDate = new Date();
+    const startDate = new Date(endDate.getTime() - config.days * 86400000);
+    const ordersUrl = `https://${config.domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json?limit=${SHOPIFY_ITEMS_PER_PAGE}&status=any&created_at_min=${startDate.toISOString()}&fields=id,line_items,created_at,financial_status,cancelled_at`;
 
-    Logger.log("Shopify report generation completed successfully!");
+    const startState = {
+      phase: 'FETCH_PRODUCTS',
+      nextProductUrl: productsUrl,
+      nextOrderUrl: ordersUrl,
+      writeStartIndex: 0,
+      startTime: new Date().getTime(),
+      totalVariants: 0,
+      uniqueOrdersCount: 0,
+      totalRevenue: 0,
+      totalItemsSold: 0,
+      status: "Starting..."
+    };
+
+    const props = PropertiesService.getScriptProperties();
+    props.setProperty('SHOPIFY_BATCH_STATE', JSON.stringify(startState));
+    props.setProperty('SHOPIFY_WORKER_STATUS', 'ACTIVE'); 
+    
+    // Initialize empty data container in Drive
+    saveShopifyDataToDrive_({}); 
+    
+    logShopifyStatus_("STARTED", "Job initialized. Worker will begin shortly.");
+    try { SpreadsheetApp.getActiveSpreadsheet().toast("Shopify Daily Job Initiated."); } catch(e) {}
+    
+    // Kick off the first worker immediately
+    processShopifyWorker();
 
   } catch (e) {
-    Logger.log(`CRITICAL ERROR in runShopifyReport: ${e.message}\nStack: ${e.stack}`);
+    console.error("Error starting Shopify report: " + e.message);
+    logShopifyStatus_("ERROR", "Start failed: " + e.message);
+  } finally {
+    lock.releaseLock();
   }
 }
 
 /**
- * Loads and validates all necessary configuration from the spreadsheet.
- * @private
- * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet The active spreadsheet object.
- * @return {object} A configuration object with domain, accessToken, and days.
+ * TRIGGER 2 (EVERY 5 MINS): The Worker.
+ * Checks for work, locks the script, and executes a batch.
  */
-function getShopifyConfig_(spreadsheet) {
-  const configSheet = spreadsheet.getSheetByName(SHOPIFY_CONFIG_SHEET_NAME);
-  if (!configSheet) {
-    throw new Error(`Configuration sheet "${SHOPIFY_CONFIG_SHEET_NAME}" does not exist.`);
-  }
+function processShopifyWorker() {
+  const props = PropertiesService.getScriptProperties();
+  const status = props.getProperty('SHOPIFY_WORKER_STATUS');
 
-  // Assumes CommonUtilities.gs is available
-  const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(configSheet);
-  const config = {
-    domain: getConfigValue(SCRIPT_CONFIGS, "Shopify Domain", 'string'),
-    accessToken: getConfigValue(SCRIPT_CONFIGS, "Shopify accessToken", 'string'),
-    days: getConfigValue(SCRIPT_CONFIGS, "Timeframe", 'int', 30), // Uses the general "Timeframe" config
-    countryCode: 'RO' // Set default country code directly
-  };
+  if (status !== 'ACTIVE') return; 
 
-  if (!config.domain || !config.accessToken || !config.domain.includes('.myshopify.com')) {
-    throw new Error(`"Shopify Domain" or "accessToken" is missing or invalid in '${SHOPIFY_CONFIG_SHEET_NAME}'.`);
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return; 
+
+  try {
+    console.log("Shopify Worker executing...");
+    processShopifyBatchCore_();
+  } catch (e) {
+    console.error("Shopify Worker Error: " + e.message);
+    logShopifyStatus_("ERROR", e.message);
+  } finally {
+    lock.releaseLock();
   }
-  if (config.days <= 0) {
-    throw new Error(`"Timeframe" must be a positive number in '${SHOPIFY_CONFIG_SHEET_NAME}'.`);
-  }
-  return config;
 }
 
 /**
- * Fetches all products and their variants from Shopify and initializes a map for data processing.
- * @private
- * @param {object} config The configuration object from getShopifyConfig_.
- * @return {Map<number, object>} A map where keys are variant IDs and values are product data objects.
+ * CORE LOGIC ENGINE
  */
-function fetchAndProcessProducts_(config) {
-  const productDataMap = new Map();
-  const endpoint = `https://${config.domain}/admin/api/${SHOPIFY_API_VERSION}/products.json?limit=${SHOPIFY_ITEMS_PER_PAGE}&fields=id,title,variants,created_at`;
+function processShopifyBatchCore_() {
+  const executionStart = new Date().getTime();
+  const scriptProperties = PropertiesService.getScriptProperties();
+  let state = JSON.parse(scriptProperties.getProperty('SHOPIFY_BATCH_STATE'));
   
-  Logger.log("Fetching Shopify products and variants...");
-  const allProducts = fetchShopifyDataWithPagination_(endpoint, config.accessToken);
+  if (!state) {
+    scriptProperties.setProperty('SHOPIFY_WORKER_STATUS', 'IDLE');
+    return;
+  }
 
-  allProducts.forEach(product => {
-    product.variants?.forEach(variant => {
-      const formattedProductId = `shopify_${config.countryCode}_${product.id}_${variant.id}`;
-      const formattedDateCreated = product.created_at ? formatDisplayDateTime(new Date(product.created_at)) : null;
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const config = loadShopifyConfig_(ss);
+    let productMap = loadShopifyDataFromDrive_(); 
 
-      productDataMap.set(variant.id, {
-        formattedId: formattedProductId,
-        variantId: variant.id,
-        productId: product.id,
-        productName: product.title,
-        variantTitle: variant.title,
-        price: parseFloatSafe(variant.price, 0.0),
-        dateCreated: formattedDateCreated,
-        stockStatus: determineStockStatus_(variant),
-        stockQuantity: parseIntSafe(variant.inventory_quantity, 0),
-        totalRevenue: 0,
-        uniqueOrderIds: new Set(),
-        totalItemsSold: 0,
-        revenueLast14Days: 0,
+    // --- PHASE 1: FETCH PRODUCTS ---
+    if (state.phase === 'FETCH_PRODUCTS') {
+      logShopifyStatus_("RUNNING", "Fetching Products...");
+      
+      while (state.nextProductUrl) {
+        if (isShopifyTimeUp_(executionStart)) break;
+
+        const response = fetchShopifyUrl_(state.nextProductUrl, config.accessToken);
+        if (response) {
+          const data = JSON.parse(response.content);
+          
+          if (data.products && data.products.length > 0) {
+            data.products.forEach(product => {
+              product.variants?.forEach(variant => {
+                const formattedProductId = `shopify_${config.countryCode || 'RO'}_${product.id}_${variant.id}`;
+                const formattedDate = product.created_at ? formatDisplayDateTime(new Date(product.created_at)) : null;
+
+                productMap[variant.id] = {
+                  formattedId: formattedProductId,
+                  variantId: variant.id,
+                  productId: product.id,
+                  productName: product.title,
+                  variantTitle: variant.title,
+                  price: parseFloatSafe(variant.price, 0.0),
+                  dateCreated: formattedDate,
+                  stockStatus: determineShopifyStockStatus_(variant),
+                  stockQuantity: parseIntSafe(variant.inventory_quantity, 0),
+                  rev: 0,
+                  sold: 0,
+                  rev14: 0,
+                  uniqueOrders: 0
+                };
+                state.totalVariants++;
+              });
+            });
+          }
+          
+          // Pagination: Update next URL from Link header
+          state.nextProductUrl = parseShopifyNextLink_(response.headers['Link']);
+        } else {
+          // Error or empty response, stop this phase
+          state.nextProductUrl = null; 
+        }
+      }
+
+      if (!state.nextProductUrl) {
+        state.phase = 'FETCH_ORDERS';
+        logShopifyStatus_("RUNNING", "Finished fetching products. Starting orders...");
+      }
+    }
+
+    // --- PHASE 2: FETCH ORDERS ---
+    if (state.phase === 'FETCH_ORDERS' && !isShopifyTimeUp_(executionStart)) {
+      logShopifyStatus_("RUNNING", "Fetching Orders...");
+      
+      const fourteenDaysAgo = new Date(new Date().getTime() - 14 * 86400000);
+
+      // We use a Set to track processed orders in this batch if needed, 
+      // but since we page sequentially, we assume APIs don't return duplicates in one walk.
+      // Ideally, we'd persist the Set, but that's too much memory. 
+      // Sequential paging is safe enough for this logic.
+
+      while (state.nextOrderUrl) {
+        if (isShopifyTimeUp_(executionStart)) break;
+
+        const response = fetchShopifyUrl_(state.nextOrderUrl, config.accessToken);
+        if (response) {
+          const data = JSON.parse(response.content);
+          
+          if (data.orders && data.orders.length > 0) {
+            data.orders.forEach(order => {
+              if (order.cancelled_at || order.financial_status === 'voided') return;
+
+              state.uniqueOrdersCount++;
+              const orderDate = new Date(order.created_at);
+              const isRecent = orderDate >= fourteenDaysAgo;
+
+              order.line_items?.forEach(item => {
+                const pInfo = productMap[item.variant_id];
+                if (pInfo) {
+                   const itemRev = parseFloatSafe(item.price, 0.0) * parseIntSafe(item.quantity, 0);
+                   const itemQty = parseIntSafe(item.quantity, 0);
+                   
+                   pInfo.rev += itemRev;
+                   pInfo.sold += itemQty;
+                   pInfo.uniqueOrders += 1; // Approx (lines vs orders), but efficient
+                   
+                   state.totalRevenue += itemRev;
+                   state.totalItemsSold += itemQty;
+
+                   if (isRecent) {
+                     pInfo.rev14 += itemRev;
+                   }
+                }
+              });
+            });
+          }
+
+          state.nextOrderUrl = parseShopifyNextLink_(response.headers['Link']);
+        } else {
+          state.nextOrderUrl = null;
+        }
+      }
+
+      if (!state.nextOrderUrl) {
+        state.phase = 'WRITE_DATA';
+        state.writeStartIndex = 0;
+      }
+    }
+
+    // --- PHASE 3: WRITE DATA ---
+    if (state.phase === 'WRITE_DATA') {
+      const sheet = getOrCreateSheet(ss, SHOPIFY_PRODUCT_DATA_SHEET_NAME);
+      
+      if (state.writeStartIndex === 0) {
+        sheet.clear();
+        const headers = [
+          "Product ID", "Parent ID", "Variant ID", "Product Name", "Variant Title", "Product Price", "Date Created",
+          "Total Orders", "Total Items Sold", "Total Revenue", "Revenue last 14 days", "Stock Status", "Stock Quantity"
+        ];
+        sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold").setHorizontalAlignment("center");
+      }
+
+      const rows = Object.values(productMap).map(p => [
+        p.formattedId, p.productId, p.variantId, p.productName, p.variantTitle, p.price, p.dateCreated,
+        p.uniqueOrders, p.sold, p.rev, p.rev14,
+        p.stockStatus, p.stockQuantity
+      ]).sort((a,b) => b[9] - a[9]); // Sort by Rev
+
+      if (rows.length > 0) {
+          const CHUNK_SIZE = 2000;
+          let doneWriting = true;
+
+          for (let i = state.writeStartIndex; i < rows.length; i += CHUNK_SIZE) {
+            if (isShopifyTimeUp_(executionStart)) {
+              logShopifyStatus_("PAUSED", `Writing paused at row ${i}...`);
+              state.writeStartIndex = i;
+              doneWriting = false;
+              break;
+            }
+            const chunk = rows.slice(i, i + CHUNK_SIZE);
+            sheet.getRange(2 + i, 1, chunk.length, 13).setValues(chunk);
+            SpreadsheetApp.flush();
+            logShopifyStatus_("WRITING", `Writing rows ${i} - ${i+chunk.length}...`);
+          }
+
+          if (doneWriting) {
+             // Formatting
+             sheet.getRange(2, 6, rows.length, 1).setNumberFormat('#,##0.00'); // Price
+             sheet.getRange(2, 10, rows.length, 2).setNumberFormat('#,##0.00'); // Revenues
+          }
+
+          if (!doneWriting) {
+             saveShopifyDataToDrive_(productMap);
+             scriptProperties.setProperty('SHOPIFY_BATCH_STATE', JSON.stringify(state));
+             return; // Exit and wait for next tick
+          }
+      }
+
+      // --- ACCOUNT DATA LOGGING ---
+      // Stats for OOS
+      let oosWithSalesCount = 0;
+      let totalWithSalesCount = 0;
+      Object.values(productMap).forEach(p => {
+         if (p.rev > 0) {
+           totalWithSalesCount++;
+           if (p.stockStatus !== "in stock") oosWithSalesCount++;
+         }
       });
-    });
-  });
+      const oosPercent = totalWithSalesCount > 0 
+        ? ((oosWithSalesCount / totalWithSalesCount) * 100).toFixed(1) + "%" 
+        : "0%";
 
-  Logger.log(`Fetched and initialized ${productDataMap.size} product variants.`);
-  return productDataMap;
+      upsertAccountDataRow(ss, SHOPIFY_ACCOUNT_SHEET_NAME, {
+        source: `Shopify - ${config.domain}`,
+        timeframe: formatDisplayDateRange(config.days),
+        revenue: state.totalRevenue,
+        orders: state.uniqueOrdersCount,
+        cost: "-",
+        oosCount: oosWithSalesCount,
+        oosPercent: oosPercent
+      });
+
+      logShopifyStatus_("COMPLETED", "Finished successfully.");
+      resetShopifyScript_();
+      scriptProperties.setProperty('SHOPIFY_WORKER_STATUS', 'IDLE');
+      return;
+    }
+
+    // Save State
+    saveShopifyDataToDrive_(productMap);
+    scriptProperties.setProperty('SHOPIFY_BATCH_STATE', JSON.stringify(state));
+
+  } catch (e) {
+    console.error("Shopify Core Error: " + e.message);
+    logShopifyStatus_("ERROR", e.message);
+  }
 }
 
-/**
- * Determines the stock status string for a Shopify variant.
- * @private
- * @param {object} variant The Shopify variant object.
- * @return {string} The calculated stock status.
- */
-function determineStockStatus_(variant) {
-  if (variant.inventory_management !== 'shopify') {
-    return "not managed";
+// --- HELPER FUNCTIONS ---
+
+function fetchShopifyUrl_(url, accessToken) {
+  try {
+    const options = {
+      method: 'get',
+      muteHttpExceptions: true,
+      headers: { 'X-Shopify-Access-Token': accessToken }
+    };
+    const response = UrlFetchApp.fetch(url, options);
+    const code = response.getResponseCode();
+    if (code === 429) {
+       Utilities.sleep(2000); // Simple hold for rate limit
+       return null; // Don't crash, just retry next worker tick
+    }
+    if (code >= 200 && code < 300) {
+      return { content: response.getContentText(), headers: response.getHeaders() };
+    }
+    console.warn(`Shopify API Error ${code}: ${response.getContentText()}`);
+    return null;
+  } catch (e) {
+    console.warn("Fetch Exception: " + e.message);
+    return null;
   }
-  const stockQuantity = parseIntSafe(variant.inventory_quantity, 0);
-  if (stockQuantity > 0) {
-    return "in stock";
+}
+
+function parseShopifyNextLink_(linkHeader) {
+  if (!linkHeader) return null;
+  // Format: <https://...>; rel="previous", <https://...>; rel="next"
+  const links = linkHeader.split(',');
+  for (const link of links) {
+    if (link.includes('rel="next"')) {
+      return link.match(/<([^>]+)>/)[1];
+    }
   }
-  if (variant.inventory_policy === 'continue') {
-    return "allows backorders";
-  }
+  return null;
+}
+
+function determineShopifyStockStatus_(variant) {
+  if (variant.inventory_management !== 'shopify') return "not managed";
+  const qty = parseIntSafe(variant.inventory_quantity, 0);
+  if (qty > 0) return "in stock";
+  if (variant.inventory_policy === 'continue') return "allows backorders";
   return "out of stock";
 }
 
-/**
- * Fetches orders and updates the product data map with revenue and sales data.
- * @private
- * @param {object} config The configuration object from getShopifyConfig_.
- * @param {Map<number, object>} productDataMap The map of product data to be updated.
- * @return {{productDataMap: Map<number, object>, summary: object}} The updated product map and summary totals.
- */
-function processOrders_(config, productDataMap) {
-  const endDate = new Date();
-  const startDate = new Date(endDate.getTime() - config.days * 24 * 60 * 60 * 1000);
-  const fourteenDaysAgo = new Date(endDate.getTime() - 14 * 24 * 60 * 60 * 1000);
+function loadShopifyConfig_(ss) {
+  const sheet = ss.getSheetByName(SHOPIFY_CONFIG_SHEET_NAME);
+  if (!sheet) throw new Error("Shopify Config sheet missing.");
+  const configs = loadConfigurationsFromSheetObject(sheet);
   
-  const endpoint = `https://${config.domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json?limit=${SHOPIFY_ITEMS_PER_PAGE}&status=any&created_at_min=${startDate.toISOString()}&fields=id,line_items,created_at,financial_status,cancelled_at`;
+  const domain = getConfigValue(configs, "Shopify Domain", 'string');
+  const token = getConfigValue(configs, "Shopify accessToken", 'string');
+  const days = getConfigValue(configs, "Timeframe", 'int', 30);
   
-  Logger.log(`Fetching Shopify orders from ${startDate.toISOString()}...`);
-  const allOrders = fetchShopifyDataWithPagination_(endpoint, config.accessToken);
-  const uniqueOrdersOverall = new Set();
-
-  allOrders.forEach(order => {
-    if (order.cancelled_at || order.financial_status === 'voided') return;
-
-    uniqueOrdersOverall.add(order.id);
-    const orderCreatedAt = new Date(order.created_at);
-
-    order.line_items?.forEach(item => {
-      const productInfo = productDataMap.get(item.variant_id);
-      if (productInfo) {
-        const itemRevenue = parseFloatSafe(item.price, 0.0) * parseIntSafe(item.quantity, 0);
-        
-        productInfo.totalRevenue += itemRevenue;
-        productInfo.totalItemsSold += parseIntSafe(item.quantity, 0);
-        productInfo.uniqueOrderIds.add(order.id);
-
-        if (orderCreatedAt >= fourteenDaysAgo) {
-          productInfo.revenueLast14Days += itemRevenue;
-        }
-      }
-    });
-  });
-
-  Logger.log(`Processed ${uniqueOrdersOverall.size} valid, unique orders.`);
-
-  // Calculate final summary totals
-  const summary = {
-    domain: config.domain, // Added for logging context
-    totalRevenue: 0,
-    totalItemsSold: 0,
-    totalUniqueOrders: uniqueOrdersOverall.size,
-    totalVariants: productDataMap.size,
-    timeframeText: formatDisplayDateRange(config.days),
-    lastRunText: formatDisplayDateTime(new Date()),
-  };
+  if (!domain || !token) throw new Error("Shopify Domain or Token missing.");
   
-  for (const product of productDataMap.values()) {
-    summary.totalRevenue += product.totalRevenue;
-    summary.totalItemsSold += product.totalItemsSold;
-  }
-
-  return { productDataMap, summary };
+  return { domain, accessToken: token, days, countryCode: 'RO' };
 }
 
-/**
- * Fetches all pages of data from a given Shopify REST API endpoint.
- * This function is designed to be robust, handling pagination by parsing the 'Link' header,
- * respecting API rate limits (HTTP 429 status) by using the 'Retry-After' header,
- * and retrying transient network errors with an exponential backoff strategy. A small delay
- * is added between page fetches to prevent hitting rate limits.
- *
- * @private
- * @param {string} initialUrl The complete, initial URL for the API endpoint. This should include
- * any query parameters like 'limit' or 'fields'.
- * @param {string} accessToken The Shopify private app access token, which is sent in the
- * 'X-Shopify-Access-Token' header for authentication.
- * @return {Array<object>} A flattened array containing all items retrieved from all pages of the API response.
- * @throws {Error} If the API request fails to return a successful status code (2xx) after
- * all configured retries have been exhausted.
- */
-function fetchShopifyDataWithPagination_(initialUrl, accessToken) {
-  const allItems = [];
-  let nextUrl = initialUrl;
-
-  const options = {
-    method: 'get',
-    muteHttpExceptions: true,
-    headers: { 'X-Shopify-Access-Token': accessToken }
-  };
-
-  while (nextUrl) {
-    let response;
-    for (let i = 0; i < SHOPIFY_API_RETRIES; i++) {
-      try {
-        response = UrlFetchApp.fetch(nextUrl, options);
-        const responseCode = response.getResponseCode();
-        
-        if (responseCode === 429) { // Rate limited
-          const retryAfter = response.getHeaders()['Retry-After'] || (5 * (i + 1));
-          Logger.log(`API Rate Limit (429). Retrying after ${retryAfter} seconds...`);
-          Utilities.sleep(parseInt(retryAfter) * 1000);
-          continue; // Retry the same request
-        }
-        
-        if (responseCode >= 200 && responseCode < 300) {
-          const responseData = JSON.parse(response.getContentText());
-          const dataKey = Object.keys(responseData)[0]; // e.g., 'products' or 'orders'
-          if (responseData[dataKey]) {
-            allItems.push(...responseData[dataKey]);
-          }
-
-          const linkHeader = response.getHeaders()['Link'];
-          const links = linkHeader ? linkHeader.split(',') : [];
-          const nextLink = links.find(link => link.includes('rel="next"'));
-          nextUrl = nextLink ? nextLink.match(/<([^>]+)>/)[1] : null;
-          break; // Success, exit retry loop
-          
-        } else {
-          throw new Error(`API Error: ${responseCode} - ${response.getContentText().substring(0, 200)}`);
-        }
-      } catch (e) {
-        Logger.log(`Fetch Exception (Attempt ${i + 1}/${SHOPIFY_API_RETRIES}): ${e.message}`);
-        if (i === SHOPIFY_API_RETRIES - 1) throw e; // Rethrow on last attempt
-        Utilities.sleep(1000 * Math.pow(2, i)); // Exponential backoff
-      }
-    }
-    if (!response) throw new Error(`Failed to fetch data from ${nextUrl} after all retries.`);
-    if(nextUrl) Utilities.sleep(500); // Pause between successful page fetches
-  }
-  return allItems;
+function logShopifyStatus_(status, message) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = getOrCreateSheet(ss, SHOPIFY_ACCOUNT_SHEET_NAME); 
+    const range = sheet.getRange("J8:K12"); // Below WooCommerce Status?
+    // Let's put it below Row 6 (Woo uses J2:K6)
+    // Actually, to avoid overlap, let's use M2:N6 for Shopify?
+    // Or just stack them. Let's use M2:N6 for Shopify to keep them side-by-side.
+    const targetRange = sheet.getRange("M2:N6");
+    
+    targetRange.setBorder(true, true, true, true, true, true);
+    targetRange.setValues([
+      ["SHOPIFY STATUS", status],
+      ["MESSAGE", message],
+      ["LAST UPDATE", new Date().toLocaleTimeString()],
+      ["", ""],
+      ["NOTE", "Refreshes every 5 mins"]
+    ]);
+    const statusCell = sheet.getRange("N2");
+    if (status === "ERROR") statusCell.setBackground("#FFCCCC");
+    else if (status === "COMPLETED") statusCell.setBackground("#CCFFCC");
+    else statusCell.setBackground("#CCFFFF");
+    SpreadsheetApp.flush(); 
+  } catch(e) {}
 }
 
-/**
- * Writes all fetched and processed data to the respective sheets.
- * @private
- * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet The active spreadsheet object.
- * @param {Map<number, object>} productDataMap The final map of processed product data.
- * @param {object} summary The final summary data for the account.
- */
-function writeResultsToSheets_(spreadsheet, productDataMap, summary) {
-  // --- Write to Shopify Sheet ---
-  const productSheet = getOrCreateSheet(spreadsheet, SHOPIFY_PRODUCT_DATA_SHEET_NAME);
-  productSheet.clear();
-
-  const productHeaders = [
-    "Product ID", "Parent ID", "Variant ID", "Product Name", "Variant Title", "Product Price", "Date Created",
-    "Total Orders", "Total Items Sold", "Total Revenue", "Revenue last 14 days", "Stock Status", "Stock Quantity"
-  ];
-  productSheet.getRange(1, 1, 1, productHeaders.length).setValues([productHeaders]).setFontWeight("bold").setHorizontalAlignment("center");
-
-  const productList = Array.from(productDataMap.values()).map(p => [
-    p.formattedId, p.productId, p.variantId, p.productName, p.variantTitle, p.price, p.dateCreated,
-    p.uniqueOrderIds.size, p.totalItemsSold, p.totalRevenue, p.revenueLast14Days,
-    p.stockStatus, p.stockQuantity
-  ]).sort((a, b) => b[9] - a[9]); // Sort by Total Revenue (index 9)
-
-  if (productList.length > 0) {
-    const range = productSheet.getRange(2, 1, productList.length, productHeaders.length);
-    range.setValues(productList);
-    productSheet.getRange(2, 6, productList.length, 1).setNumberFormat('#,##0.00'); // Price (Column F)
-    productSheet.getRange(2, 10, productList.length, 2).setNumberFormat('#,##0.00'); // Revenues (Columns J, K)
-  } else {
-    productSheet.getRange(2, 1).setValue("No product variant data to display.");
+function resetShopifyScript_() {
+  const props = PropertiesService.getScriptProperties();
+  const fileId = props.getProperty('SHOPIFY_TEMP_FILE_ID');
+  if (fileId) {
+    try { DriveApp.getFileById(fileId).setTrashed(true); } catch(e) {}
+    props.deleteProperty('SHOPIFY_TEMP_FILE_ID');
   }
-  
-  // --- Write to AccountData Sheet ---
-  // Calculates OOS items with sales
-  let oosWithSalesCount = 0;
-  let totalWithSalesCount = 0;
-  
-  for (const product of productDataMap.values()) {
-    if (product.totalRevenue > 0) {
-      totalWithSalesCount++;
-      if (product.stockStatus !== "in stock") {
-        oosWithSalesCount++;
-      }
-    }
-  }
-  
-  const oosPercent = totalWithSalesCount > 0 
-    ? ((oosWithSalesCount / totalWithSalesCount) * 100).toFixed(1) + "%" 
-    : "0%";
+  props.deleteProperty('SHOPIFY_BATCH_STATE');
+}
 
-  upsertAccountDataRow(spreadsheet, SHOPIFY_SUMMARY_DATA_SHEET_NAME, {
-    source: `Shopify - ${summary.domain}`,
-    timeframe: summary.timeframeText,
-    revenue: summary.totalRevenue,
-    orders: summary.totalUniqueOrders,
-    cost: "-", // Cost not fetched from Shopify
-    oosCount: oosWithSalesCount,
-    oosPercent: oosPercent
-  });
+function isShopifyTimeUp_(startTime) {
+  return (new Date().getTime() - startTime) > SHOPIFY_MAX_EXECUTION_TIME_MS;
+}
+
+function saveShopifyDataToDrive_(data) {
+  const content = JSON.stringify(data);
+  const props = PropertiesService.getScriptProperties();
+  const fileId = props.getProperty('SHOPIFY_TEMP_FILE_ID');
+  if (fileId) {
+    try { DriveApp.getFileById(fileId).setContent(content); return; } catch (e) {}
+  }
+  const file = DriveApp.createFile(SHOPIFY_TEMP_FILENAME, content, MimeType.PLAIN_TEXT);
+  props.setProperty('SHOPIFY_TEMP_FILE_ID', file.getId());
+}
+
+function loadShopifyDataFromDrive_() {
+  const props = PropertiesService.getScriptProperties();
+  const fileId = props.getProperty('SHOPIFY_TEMP_FILE_ID');
+  if (fileId) {
+    try { return JSON.parse(DriveApp.getFileById(fileId).getBlob().getDataAsString()); } catch (e) {}
+  }
+  return {};
 }

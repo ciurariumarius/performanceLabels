@@ -17,14 +17,40 @@
  * @param {GoogleAppsScript.Spreadsheet.Sheet} configSheet The sheet object to read from.
  * @return {object} An object where keys are labels from Col A and values are from Col B. Returns empty object on error.
  */
+/**
+ * Loads configurations from a specified sheet.
+ * Assumes a two-column layout where Column A contains labels and Column B contains values.
+ * Uses CacheService to minimize Spreadsheet reads (caches for 10 minutes).
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} configSheet The sheet object to read from.
+ * @return {object} An object where keys are labels from Col A and values are from Col B. Returns empty object on error.
+ */
 function loadConfigurationsFromSheetObject(configSheet) {
-  const configurations = {};
   if (!configSheet) {
     Logger.log("Error in CommonUtilities: The provided configSheet object was null.");
-    return configurations;
+    return {};
   }
+
+  const sheetName = configSheet.getName();
+  const cacheKey = `CONFIG_CACHE_${sheetName}`;
+  const cache = CacheService.getScriptCache();
+  
+  // 1. Try Cache
+  const cachedData = cache.get(cacheKey);
+  if (cachedData) {
+    // Logger.log(`Loaded config for "${sheetName}" from cache.`);
+    return JSON.parse(cachedData);
+  }
+
+  // 2. Fetch from Sheet
+  Logger.log(`Cache miss for "${sheetName}". Fetching from sheet...`);
+  const configurations = {};
+  
   try {
-    const dataRange = configSheet.getRange("A1:B" + configSheet.getLastRow());
+    const lastRow = configSheet.getLastRow();
+    if (lastRow < 1) return {};
+
+    const dataRange = configSheet.getRange("A1:B" + lastRow);
     const data = dataRange.getValues();
 
     for (const row of data) {
@@ -33,10 +59,14 @@ function loadConfigurationsFromSheetObject(configSheet) {
         configurations[label] = row[1]; // Store the value from column B
       }
     }
+    
+    // 3. Save to Cache (10 minutes = 600 seconds)
+    cache.put(cacheKey, JSON.stringify(configurations), 600);
     return configurations;
+
   } catch (e) {
     Logger.log(`Error in CommonUtilities while loading configurations: ${e.message}`);
-    return {}; // Return empty object on error to prevent partial configs
+    return {}; // Return empty object on error
   }
 }
 
@@ -281,9 +311,11 @@ function upsertAccountDataRow(spreadsheet, sheetName, data) {
   // Headers
   const headers = ["Timestamp", "Source", "Timeframe", "Revenue", "Cost", "Orders", "OOS w/ Sales (#)", "OOS w/ Sales (%)"];
   
-  // Ensure headers exist
-  if (sheet.getLastRow() === 0) {
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold").setHorizontalAlignment("center");
+  // Robust Header Check: Ensure headers exist even if rows are present
+  // This prevents issues where data exists but headers were deleted.
+  const headerCheck = sheet.getRange(1, 1).getValue();
+  if (headerCheck !== headers[0] || sheet.getLastRow() === 0) {
+     sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold").setHorizontalAlignment("center");
   }
   
   const lastRow = sheet.getLastRow();
@@ -368,4 +400,43 @@ function fetchJsonWithRetries(endpoint, options, retries = 3) {
     }
   }
   throw new Error(`Failed to fetch data from ${endpoint.substring(0, 100)}... after ${retries} attempts.`);
+}
+
+// =========================================================================================
+// --- Batch Writing Helper Functions ---
+// =========================================================================================
+
+/**
+ * Writes a single column of values to a sheet in chunks to avoid timeouts.
+ * Recommended for datasets larger than 5,000 rows.
+ * 
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The target sheet.
+ * @param {number} startRow The 1-indexed starting row (e.g., 2 for data below headers).
+ * @param {number} startCol The 1-indexed starting column.
+ * @param {Array<Array<string|number>>} values The 2D array of values to write (must be single column for this specific helper, or multi-column if consistent). 
+ *                                             Actually, let's make it generic for any 2D array.
+ * @param {number} [chunkSize=5000] The number of rows to write per batch.
+ */
+function writeValuesToSheetSafe(sheet, startRow, startCol, values, chunkSize = 5000) {
+  if (!values || values.length === 0) {
+    Logger.log("writeValuesToSheetSafe: No values to write.");
+    return;
+  }
+
+  const totalRows = values.length;
+  const totalCols = values[0].length;
+  
+  Logger.log(`Starting batch write of ${totalRows} rows to column ${startCol}...`);
+
+  for (let i = 0; i < totalRows; i += chunkSize) {
+    const chunk = values.slice(i, i + chunkSize);
+    
+    // Calculate range: Row = startRow + i, Col = startCol, Height = chunk.length, Width = totalCols
+    sheet.getRange(startRow + i, startCol, chunk.length, totalCols).setValues(chunk);
+    
+    SpreadsheetApp.flush(); // Commit this chunk
+    Logger.log(`Written batch: Rows ${i + 1} to ${i + chunk.length}`);
+  }
+  
+  Logger.log("Batch write completed.");
 }

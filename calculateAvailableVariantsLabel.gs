@@ -175,9 +175,8 @@ function writeVariantLabelsToSheet_(sheet, labels) {
   // Assumes CommonUtilities.gs findOrCreateHeaderColumn is available
   const outputCol = findOrCreateHeaderColumn(sheet, VARIANTS_OUTPUT_LABEL_HEADER, VARIANTS_HEADER_ROW_NUM);
 
-  const range = sheet.getRange(VARIANTS_HEADER_ROW_NUM + 1, outputCol, labels.length, 1);
-  range.clearContent();
-  range.setValues(labels);
+  // Use the chunked writer from CommonUtilities.gs
+  writeValuesToSheetSafe(sheet, VARIANTS_HEADER_ROW_NUM + 1, outputCol, labels);
   
   Logger.log(`Wrote ${labels.length} available variant labels to the sheet.`);
 }

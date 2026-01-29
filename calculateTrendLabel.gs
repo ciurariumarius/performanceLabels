@@ -207,9 +207,12 @@ function writeTrendLabelsToSheet_(sheet, labels) {
   // Assumes CommonUtilities.gs findOrCreateHeaderColumn is available
   const outputCol = findOrCreateHeaderColumn(sheet, TREND_OUTPUT_LABEL_HEADER, TREND_HEADER_ROW_NUM);
 
-  const range = sheet.getRange(TREND_HEADER_ROW_NUM + 1, outputCol, labels.length, 1);
-  range.clearContent();
-  range.setValues(labels);
+  // Calculate total rows to process
+  // Note: We don't clear the entire column because usually the row count matches the input data.
+  // If we needed to clear, we'd do it before this function or inside a separate clear step.
+  
+  // Use the chunked writer from CommonUtilities.gs
+  writeValuesToSheetSafe(sheet, TREND_HEADER_ROW_NUM + 1, outputCol, labels);
   
   Logger.log(`Wrote ${labels.length} trend labels to the sheet.`);
 }

@@ -159,9 +159,8 @@ function writeNewProductLabelsToSheet_(sheet, labels) {
   // Assumes CommonUtilities.gs findOrCreateHeaderColumn is available
   const outputCol = findOrCreateHeaderColumn(sheet, NEW_PROD_OUTPUT_LABEL_HEADER, NEW_PROD_HEADER_ROW_NUM);
 
-  const range = sheet.getRange(NEW_PROD_HEADER_ROW_NUM + 1, outputCol, labels.length, 1);
-  range.clearContent();
-  range.setValues(labels);
+  // Use the chunked writer from CommonUtilities.gs
+  writeValuesToSheetSafe(sheet, NEW_PROD_HEADER_ROW_NUM + 1, outputCol, labels);
   
   Logger.log(`Wrote ${labels.length} new product labels to the sheet.`);
 }

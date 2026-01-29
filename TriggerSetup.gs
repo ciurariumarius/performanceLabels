@@ -52,21 +52,37 @@ function setupWooCommerceComplete() {
  * 1. Shopify Daily Report (5:00 AM)
  * 2. Label Calculations (Daily at 6:00 AM)
  */
+/**
+ * OPTION 2: Shopify Complete Setup
+ * --------------------------------
+ * Sets up:
+ * 1. Shopify Daily Start (5:00 AM)
+ * 2. Shopify Worker (Every 5 mins)
+ * 3. Label Calculations (Daily at 6:00 AM)
+ */
 function setupShopifyComplete() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // 1. Clean existing triggers
-  deleteTriggersForHandler_('runShopifyReport');
+  // 1. Clean existing triggers (including old ones)
+  deleteTriggersForHandler_('runShopifyReport'); // Legacy
+  deleteTriggersForHandler_('startShopifyReport');
+  deleteTriggersForHandler_('processShopifyWorker');
   deleteTriggersForHandler_('runAllLabelCalculations');
 
   // 2. Shopify Start (Daily 5am)
-  ScriptApp.newTrigger('runShopifyReport')
+  ScriptApp.newTrigger('startShopifyReport')
     .timeBased()
     .everyDays(1)
     .atHour(5)
     .create();
     
-  // 3. Labels (Daily 6am)
+  // 3. Shopify Worker (5 min)
+  ScriptApp.newTrigger('processShopifyWorker')
+    .timeBased()
+    .everyMinutes(5)
+    .create();
+    
+  // 4. Labels (Daily 6am)
   ScriptApp.newTrigger('runAllLabelCalculations')
     .timeBased()
     .everyDays(1)

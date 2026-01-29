@@ -199,9 +199,11 @@ function writeRevenueLabelsToSheet_(sheet, labels) {
   const advancedLabels = labels.map(row => [row[0]]);
   const simpleLabels = labels.map(row => [row[1]]);
 
-  const baseRange = sheet.getRange(REVENUE_HEADER_ROW_NUM + 1, 1, labels.length, sheet.getMaxColumns());
-  baseRange.offset(0, advancedCol - 1, labels.length, 1).clearContent().setValues(advancedLabels);
-  baseRange.offset(0, simpleCol - 1, labels.length, 1).clearContent().setValues(simpleLabels);
+  // Write Advanced Labels in chunks
+  writeValuesToSheetSafe(sheet, REVENUE_HEADER_ROW_NUM + 1, advancedCol, advancedLabels);
+  
+  // Write Simple Labels in chunks
+  writeValuesToSheetSafe(sheet, REVENUE_HEADER_ROW_NUM + 1, simpleCol, simpleLabels);
   
   Logger.log(`Wrote ${labels.length} revenue labels to the sheet.`);
 }
