@@ -15,9 +15,9 @@ const GADS_HEADER_ROW_NUM = 1;
 const MIN_CLICKS_THRESHOLD = 10;
 
 // Output Headers
-const HEADER_LABEL_ROAS = "label_roas";
-const HEADER_LABEL_CVR = "label_cvr";
-const HEADER_LABEL_CLICKS = "label_clicks";
+const HEADER_LABEL_ROAS = "LABEL_GADS_ROAS";
+const HEADER_LABEL_CVR = "LABEL_GADS_CONV_RATE";
+const HEADER_LABEL_CLICKS = "LABEL_GADS_CLICKS";
 
 /**
  * Main orchestrator function to run Google Ads label calculations.

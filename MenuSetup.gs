@@ -16,5 +16,17 @@ function onOpen() {
           .addSeparator()
           .addItem('▶️ Manually Start Shopify Fetch', 'startShopifyReport')
           .addItem('▶️ Manually Start WooCommerce Fetch', 'startWooCommerceReport'))
+      .addSeparator()
+      .addItem('📖 Show Documentation', 'showDocumentation')
       .addToUi();
+}
+
+/**
+ * Opens the documentation sidebar.
+ */
+function showDocumentation() {
+  const html = HtmlService.createHtmlOutputFromFile('README')
+      .setTitle('Performance Labels Documentation')
+      .setWidth(350);
+  SpreadsheetApp.getUi().showSidebar(html);
 }
