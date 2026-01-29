@@ -26,17 +26,37 @@ const CUST_MAX_EXECUTION_TIME_SECONDS = 270; // 4.5 minutes to be safe.
  */
 function runCustomerReportFromOrders() {
   try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // --- 0. Ensure Destination Sheet Exists Immediately ---
+    const customerSheet = getOrCreateSheet(spreadsheet, CUST_ALL_CUSTOMERS_SHEET_NAME);
+    const headers = ["First Name", "Last Name", "Email", "Phone", "Country", "Zip"];
+    if (customerSheet.getLastRow() === 0) {
+       customerSheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold").setHorizontalAlignment("center");
+    }
+
     const scriptProperties = PropertiesService.getScriptProperties();
     const lastSyncDate = scriptProperties.getProperty('CUST_LAST_SUCCESSFUL_SYNC');
     
     // --- 1. Load Configuration ---
-    const config = _cust_loadSimpleConfig();
-    const shopUrl = config["WooCommerce Domain"];
-    const consumerKey = config["WooCommerce API Key"];
-    const consumerSecret = config["WooCommerce API Secret"];
+    const configSheet = spreadsheet.getSheetByName(CUST_CONFIG_SHEET_NAME);
+    if (!configSheet) {
+      throw new Error(`Configuration sheet "${CUST_CONFIG_SHEET_NAME}" does not exist.`);
+    }
+
+    // Use CommonUtilities to load config
+    const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(configSheet);
+    
+    let shopUrl = getConfigValue(SCRIPT_CONFIGS, "WooCommerce Domain", 'string');
+    if (shopUrl && !shopUrl.startsWith("http")) {
+      shopUrl = "https://" + shopUrl;
+    }
+
+    const consumerKey = getConfigValue(SCRIPT_CONFIGS, "WooCommerce API Key", 'string');
+    const consumerSecret = getConfigValue(SCRIPT_CONFIGS, "WooCommerce API Secret", 'string');
     
     if (!shopUrl || !consumerKey || !consumerSecret) {
-      throw new Error(`Config missing in '${CUST_CONFIG_SHEET_NAME}'.`);
+      throw new Error(`"WooCommerce Domain", "API Key", or "API Secret" missing in '${CUST_CONFIG_SHEET_NAME}'.`);
     }
     const authHeader = { "Authorization": "Basic " + Utilities.base64Encode(`${consumerKey}:${consumerSecret}`) };
     Logger.log(`Configuration loaded. Last successful sync: ${lastSyncDate || 'Never'}`);
@@ -152,7 +172,7 @@ function _cust_fetchOrdersAndBuildCustomerList(shopUrl, authHeader, scriptProper
  */
 function _cust_writeCustomerListToSheet(customerMap, isFullSync) {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = _cust_getOrCreateSheet(spreadsheet, CUST_ALL_CUSTOMERS_SHEET_NAME);
+  const sheet = getOrCreateSheet(spreadsheet, CUST_ALL_CUSTOMERS_SHEET_NAME);
   
   if (isFullSync) {
     sheet.clear();
@@ -256,18 +276,6 @@ function _cust_formatPhoneE164(phone, country) {
   return `+${dialingCode}${cleanPhone}`;
 }
 
-function _cust_loadSimpleConfig() {
-    const configSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CUST_CONFIG_SHEET_NAME);
-    if (!configSheet) throw new Error(`Config sheet "${CUST_CONFIG_SHEET_NAME}" not found.`);
-    const data = configSheet.getRange("A:B").getValues();
-    const config = {};
-    data.forEach(row => { if (row[0]) config[row[0].toString().trim()] = row[1].toString().trim(); });
-    if (config["WooCommerce Domain"] && !config["WooCommerce Domain"].startsWith("http")) {
-        config["WooCommerce Domain"] = "https://" + config["WooCommerce Domain"];
-    }
-    return config;
-}
-
 function _cust_fetchWooDataWithRetries(endpoint, options) {
   options.muteHttpExceptions = true;
   for (let i = 0; i < CUST_API_RETRIES; i++) {
@@ -282,10 +290,4 @@ function _cust_fetchWooDataWithRetries(endpoint, options) {
     }
   }
   throw new Error(`Failed to fetch data from ${endpoint} after all retries.`);
-}
-
-function _cust_getOrCreateSheet(spreadsheet, sheetName) {
-  let sheet = spreadsheet.getSheetByName(sheetName);
-  if (!sheet) sheet = spreadsheet.insertSheet(sheetName);
-  return sheet;
 }

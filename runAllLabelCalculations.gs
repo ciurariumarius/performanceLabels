@@ -47,6 +47,10 @@ function runAllLabelCalculations() {
     runNewProductLabelCalculation();
     Logger.log("--- Completed: New Product Labels ---");
 
+    Logger.log("--- (8/8) Starting: Google Ads Labels ---");
+    runGoogleAdsLabelCalculation();
+    Logger.log("--- Completed: Google Ads Labels ---");
+
 
     const endTime = new Date();
     const executionTime = (endTime.getTime() - startTime.getTime()) / 1000;

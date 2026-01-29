@@ -259,3 +259,62 @@ function formatDisplayDate(date) {
     return "Date Format Error";
   }
 }
+// =========================================================================================
+// --- Account Data Logging Helper Functions ---
+// =========================================================================================
+
+/**
+ * Updates a row in the AccountData sheet based on the Source Name (Column B).
+ * If the source exists, it overwrites the row. If not, it appends a new row.
+ * 
+ * Target Schema:
+ * [Timestamp, Source, Timeframe, Revenue, Cost, Orders, OOS #, OOS %]
+ * 
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet The active spreadsheet.
+ * @param {string} sheetName The name of the AccountData sheet.
+ * @param {object} data An object containing the metrics to write.
+ *                     { source: "Shopify", timeframe: "30 Days", revenue: 100, cost: 0, orders: 10, oosCount: 2, oosPercent: "10%" }
+ */
+function upsertAccountDataRow(spreadsheet, sheetName, data) {
+  const sheet = getOrCreateSheet(spreadsheet, sheetName);
+  
+  // Headers
+  const headers = ["Timestamp", "Source", "Timeframe", "Revenue", "Cost", "Orders", "OOS w/ Sales (#)", "OOS w/ Sales (%)"];
+  
+  // Ensure headers exist
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold").setHorizontalAlignment("center");
+  }
+  
+  const lastRow = sheet.getLastRow();
+  let targetRow = -1;
+  
+  // Search for existing source in Column B (Index 1)
+  if (lastRow > 1) {
+    const sourceColumn = sheet.getRange(2, 2, lastRow - 1, 1).getValues().flat(); // Get all sources
+    const rowIndex = sourceColumn.indexOf(data.source);
+    if (rowIndex !== -1) {
+      targetRow = rowIndex + 2; // +2 because 0-index + 1 header + 1 for 1-based index
+    }
+  }
+  
+  // Prepare row data
+  const rowData = [
+    formatDisplayDateTime(new Date()), // Timestamp
+    data.source,
+    data.timeframe,
+    data.revenue,
+    data.cost !== undefined ? data.cost : "-",
+    data.orders,
+    data.oosCount !== undefined ? data.oosCount : "-",
+    data.oosPercent !== undefined ? data.oosPercent : "-"
+  ];
+  
+  if (targetRow !== -1) {
+    // update existing
+    sheet.getRange(targetRow, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    // append new
+    sheet.appendRow(rowData);
+  }
+}

@@ -66,7 +66,7 @@ function runGA4Report() {
 
     // --- 4. Write Results to Sheets ---
     const displayTimeframe = `${formatDisplayDate(startDateMainObj)} - ${formatDisplayDate(today)}`;
-    writeResultsToSheets_GA4_(spreadsheet, mainReportResults, accountSummaryData, displayTimeframe);
+    writeResultsToSheets_GA4_(spreadsheet, mainReportResults, accountSummaryData, propertyId, displayTimeframe);
 
     Logger.log('GA4 report generation completed successfully.');
 
@@ -190,9 +190,10 @@ function fetchAccountSummaryData_GA4_(propertyId, startDate, endDate) {
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet The active spreadsheet object.
  * @param {object} mainReportResults The results from fetchAndProcessMainReport_GA4_.
  * @param {object} accountSummaryData The results from fetchAccountSummaryData_GA4_.
+ * @param {string} propertyId The GA4 property ID.
  * @param {string} displayTimeframe The formatted date range string for display.
  */
-function writeResultsToSheets_GA4_(spreadsheet, mainReportResults, accountSummaryData, displayTimeframe) {
+function writeResultsToSheets_GA4_(spreadsheet, mainReportResults, accountSummaryData, propertyId, displayTimeframe) {
   // --- Write to Analytics Sheet ---
   const analyticsSheet = getOrCreateSheet(spreadsheet, GA4_ANALYTICS_SHEET_NAME);
   analyticsSheet.clearContents();
@@ -207,29 +208,13 @@ function writeResultsToSheets_GA4_(spreadsheet, mainReportResults, accountSummar
   }
 
   // --- Write to AccountData Sheet ---
-  const accountDataSheet = getOrCreateSheet(spreadsheet, GA4_ACCOUNT_DATA_SHEET_NAME);
-  if (accountDataSheet.getMaxRows() >= 8) {
-      accountDataSheet.getRange("A7:J8").clearContent();
-  }
-
-  const accountHeaders = ["Timeframe (GA4)", "Total Users (GA4)", "Total Transactions (GA4)", "Total Purchase Revenue (GA4)", "Avg Revenue/User (GA4)", "Total Item Revenue (Calculated)", "Total Items Purchased (Calculated)", "Total Items Viewed (Calculated)", "Total Items Added to Cart (Calculated)", "Last Run (GA4)"];
-  const accountValues = [
-    displayTimeframe,
-    accountSummaryData.totalUsers,
-    accountSummaryData.totalTransactions,
-    accountSummaryData.purchaseRevenue,
-    accountSummaryData.avgRevenuePerUser,
-    mainReportResults.totals.totalRevenue,
-    mainReportResults.totals.itemsPurchased,
-    mainReportResults.totals.itemsViewed,
-    mainReportResults.totals.itemsAddedToCart,
-    formatDisplayDateTime(new Date())
-  ];
-
-  accountDataSheet.getRange(7, 1, 1, accountHeaders.length).setValues([accountHeaders]).setFontWeight("bold").setHorizontalAlignment("center");
-  accountDataSheet.getRange(8, 1, 1, accountValues.length).setValues([accountValues]);
-
-  accountDataSheet.getRange(8, 2, 1, 2).setNumberFormat("#,##0");
-  accountDataSheet.getRange(8, 4, 1, 3).setNumberFormat("#,##0.00");
-  accountDataSheet.getRange(8, 7, 1, 3).setNumberFormat("#,##0");
+  upsertAccountDataRow(spreadsheet, GA4_ACCOUNT_DATA_SHEET_NAME, {
+    source: `GA4 - ${propertyId}`,
+    timeframe: displayTimeframe,
+    revenue: mainReportResults.totals.totalRevenue,
+    orders: accountSummaryData.totalTransactions,
+    cost: "-", // Cost data not pulled for GA4 in this setup
+    oosCount: "-", // Stock status not available in standard GA4 reports
+    oosPercent: "-"
+  });
 }

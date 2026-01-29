@@ -188,6 +188,7 @@ function processOrders_(config, productDataMap) {
 
   // Calculate final summary totals
   const summary = {
+    domain: config.domain, // Added for logging context
     totalRevenue: 0,
     totalItemsSold: 0,
     totalUniqueOrders: uniqueOrdersOverall.size,
@@ -306,18 +307,30 @@ function writeResultsToSheets_(spreadsheet, productDataMap, summary) {
   }
   
   // --- Write to AccountData Sheet ---
-  const accountDataSheet = getOrCreateSheet(spreadsheet, SHOPIFY_SUMMARY_DATA_SHEET_NAME);
-  if (accountDataSheet.getMaxRows() >= 17) {
-      accountDataSheet.getRange("A16:F17").clearContent();
+  // Calculates OOS items with sales
+  let oosWithSalesCount = 0;
+  let totalWithSalesCount = 0;
+  
+  for (const product of productDataMap.values()) {
+    if (product.totalRevenue > 0) {
+      totalWithSalesCount++;
+      if (product.stockStatus !== "in stock") {
+        oosWithSalesCount++;
+      }
+    }
   }
+  
+  const oosPercent = totalWithSalesCount > 0 
+    ? ((oosWithSalesCount / totalWithSalesCount) * 100).toFixed(1) + "%" 
+    : "0%";
 
-  const accountHeaders = ["Timeframe (Shopify)", "Total Revenue (Shopify)", "Total Orders (Shopify)", "Total Items Sold (Shopify)", "Total Variants (Shopify)", "Last Run (Shopify)"];
-  const accountValues = [
-    summary.timeframeText, summary.totalRevenue, summary.totalUniqueOrders,
-    summary.totalItemsSold, summary.totalVariants, summary.lastRunText
-  ];
-
-  accountDataSheet.getRange(16, 1, 1, accountHeaders.length).setValues([accountHeaders]).setFontWeight("bold").setHorizontalAlignment("center");
-  accountDataSheet.getRange(17, 1, 1, accountValues.length).setValues([accountValues]);
-  accountDataSheet.getRange(17, 2).setNumberFormat('#,##0.00'); // Total Revenue
+  upsertAccountDataRow(spreadsheet, SHOPIFY_SUMMARY_DATA_SHEET_NAME, {
+    source: `Shopify - ${summary.domain}`,
+    timeframe: summary.timeframeText,
+    revenue: summary.totalRevenue,
+    orders: summary.totalUniqueOrders,
+    cost: "-", // Cost not fetched from Shopify
+    oosCount: oosWithSalesCount,
+    oosPercent: oosPercent
+  });
 }

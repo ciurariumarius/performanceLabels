@@ -10,7 +10,7 @@ The system fetches product data and metrics, processes them, and assigns various
 - **Multi-Platform Support:** Analyzes data from WooCommerce and Shopify.
 - **Automated Labeling:** Calculates 7 different types of performance labels.
 - **Configurable Thresholds:** Users can adjust logic (e.g., what counts as "High Revenue") directly from the Google Sheet.
-- **Modular Design:** Each label calculation is handled by a dedicated script for easy maintenance.
+- **Modular Data Sources:** You can use any combination of sources (e.g., WooCommerce + Google Ads, OR Shopify + Google Ads). The system dynamically handles the data present.
 
 ## 📂 Project Structure
 
@@ -21,6 +21,7 @@ The system fetches product data and metrics, processes them, and assigns various
 | `CommonUtilities.gs` | Shared helper functions for config loading, date formatting, and sheet management. |
 | `calculate*.gs` | Individual scripts for calculating specific labels (Revenue, Price, Orders, etc.). |
 | `*Data.gs` | Connectors for fetching data from external sources (Shopify, WooCommerce, GA4). |
+| `GoogleAdsData.gs` | **Google Ads Script.** Fetches product performance data (clicks, conversions) from the Ads interface. |
 
 ## 🏷️ Label Types
 
@@ -51,6 +52,9 @@ The system generates the following labels in the **Metrics** sheet:
 ## ⚙️ Setup & Configuration
 
 ### 1. Google Sheets Setup
+You can use the following template to get started quickly:
+[**📄 Google Sheet Template**](https://docs.google.com/spreadsheets/d/1AWjSOfx4P6USb-Yjy_luq80MkxcL-b2xoeejVxWQ9G8/edit?gid=1110638176#gid=1110638176)
+
 The script expects two main sheets:
 - **`Config`**: Contains configuration settings.
     - **Cell B20**: Platform selector (WooCommerce, Shopify, Analytics).
@@ -69,6 +73,14 @@ The script expects two main sheets:
 2. Select your platform in cell **B20**.
 3. Fill in the required API keys (Shopify/WooCommerce) and Google Analytics Property ID.
 4. Adjust the threshold percentages for label calculations if needed.
+
+### 4. Google Ads Integration (Optional)
+This script runs **inside** the Google Ads interface, not in the Google Sheet's Apps Script.
+1. Log in to your Google Ads Account.
+2. Go to **Tools & Settings > Bulk Actions > Scripts**.
+3. Create a new script and paste the contents of `GoogleAdsData.gs`.
+4. Replace `YOUR_SPREADSHEET_URL_HERE` with your sheet's URL.
+5. Authorize and Run. This will push Ads metrics into the **Metrics** sheet for label calculation.
 
 ## 🚀 Usage
 

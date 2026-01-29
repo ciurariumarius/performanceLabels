@@ -168,6 +168,7 @@ function processOrders_Woo_(shopUrl, authHeader, days, productDataMap) {
   
   // Calculate final summary totals
   const summary = {
+    shopUrl: shopUrl, // Added for logging context
     totalRevenue: 0,
     totalItemsSold: 0,
     totalUniqueOrders: uniqueOrdersOverall.size,
@@ -255,18 +256,30 @@ function writeResultsToSheets_Woo_(spreadsheet, productDataMap, summary) {
   }
   
   // --- Write to AccountData Sheet ---
-  const accountDataSheet = getOrCreateSheet(spreadsheet, WOO_ACCOUNT_DATA_SHEET_NAME);
-  if (accountDataSheet.getMaxRows() >= 13) {
-      accountDataSheet.getRange("A12:F13").clearContent();
+  // Calculates OOS items with sales
+  let oosWithSalesCount = 0;
+  let totalWithSalesCount = 0;
+  
+  for (const product of productDataMap.values()) {
+    if (product.totalRevenue > 0) {
+      totalWithSalesCount++;
+      if (product.stockStatus !== "in stock" && product.stockStatus !== "instock") { // Catch various string variations
+        oosWithSalesCount++;
+      }
+    }
   }
   
-  const accountHeaders = ["Timeframe (Woo)", "Total Revenue (Woo)", "Total Orders (Woo)", "Total Items Sold (Woo)", "Total Products (Woo)", "Last Run (Woo)"];
-  const accountValues = [
-      summary.timeframeText, summary.totalRevenue, summary.totalUniqueOrders, 
-      summary.totalItemsSold, summary.totalProducts, summary.lastRunText
-  ];
+  const oosPercent = totalWithSalesCount > 0 
+    ? ((oosWithSalesCount / totalWithSalesCount) * 100).toFixed(1) + "%" 
+    : "0%";
 
-  accountDataSheet.getRange(12, 1, 1, accountHeaders.length).setValues([accountHeaders]).setFontWeight("bold").setHorizontalAlignment("center");
-  accountDataSheet.getRange(13, 1, 1, accountValues.length).setValues([accountValues]);
-  accountDataSheet.getRange(13, 2).setNumberFormat('#,##0.00'); // Total Revenue
+  upsertAccountDataRow(spreadsheet, WOO_ACCOUNT_DATA_SHEET_NAME, {
+    source: `WooCommerce - ${summary.shopUrl}`,
+    timeframe: summary.timeframeText,
+    revenue: summary.totalRevenue,
+    orders: summary.totalUniqueOrders,
+    cost: "-", // Cost not typically available via Woo API
+    oosCount: oosWithSalesCount,
+    oosPercent: oosPercent
+  });
 }
