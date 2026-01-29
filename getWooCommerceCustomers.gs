@@ -47,11 +47,7 @@ function runCustomerReportFromOrders() {
     // Use CommonUtilities to load config
     const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(configSheet);
     
-    let shopUrl = getConfigValue(SCRIPT_CONFIGS, "WooCommerce Domain", 'string');
-    if (shopUrl && !shopUrl.startsWith("http")) {
-      shopUrl = "https://" + shopUrl;
-    }
-
+    const shopUrl = ensureHttps(getConfigValue(SCRIPT_CONFIGS, "WooCommerce Domain", 'string'));
     const consumerKey = getConfigValue(SCRIPT_CONFIGS, "WooCommerce API Key", 'string');
     const consumerSecret = getConfigValue(SCRIPT_CONFIGS, "WooCommerce API Secret", 'string');
     
@@ -124,13 +120,11 @@ function _cust_fetchOrdersAndBuildCustomerList(shopUrl, authHeader, scriptProper
       return { customerMap: customerMap, nextPageToFetch: page };
     }
     
-    let endpoint = `${shopUrl}/wp-json/wc/v3/orders?page=${page}&per_page=${CUST_ORDERS_PER_PAGE}&_fields=id,billing`;
-    if(lastSyncDate) {
-        endpoint += `&after=${lastSyncDate}`;
-    }
+    const endpoint = `${shopUrl}/wp-json/wc/v3/orders?page=${page}&per_page=${CUST_ORDERS_PER_PAGE}&_fields=id,billing${lastSyncDate ? `&after=${lastSyncDate}` : ''}`;
     Logger.log(`Fetching orders: ${endpoint}`);
     
-    const orderBatch = _cust_fetchWooDataWithRetries(endpoint, { headers: authHeader });
+    // Use generic fetch with retries from CommonUtilities.gs
+    const orderBatch = fetchJsonWithRetries(endpoint, { headers: authHeader }, CUST_API_RETRIES);
 
     if (!orderBatch || orderBatch.length === 0) {
       Logger.log('No more orders found. Finalizing customer list.');
@@ -276,18 +270,4 @@ function _cust_formatPhoneE164(phone, country) {
   return `+${dialingCode}${cleanPhone}`;
 }
 
-function _cust_fetchWooDataWithRetries(endpoint, options) {
-  options.muteHttpExceptions = true;
-  for (let i = 0; i < CUST_API_RETRIES; i++) {
-    try {
-      const response = UrlFetchApp.fetch(endpoint, options);
-      if (response.getResponseCode() >= 200 && response.getResponseCode() < 300) return JSON.parse(response.getContentText());
-      Logger.log(`API Error (Attempt ${i + 1}): Code ${response.getResponseCode()} for ${endpoint}`);
-      if (i < CUST_API_RETRIES - 1) Utilities.sleep(2000 * (i + 1));
-    } catch (e) {
-      Logger.log(`Fetch Exception (Attempt ${i + 1}): ${e.message}`);
-      if (i === CUST_API_RETRIES - 1) throw e;
-    }
-  }
-  throw new Error(`Failed to fetch data from ${endpoint} after all retries.`);
-}
+

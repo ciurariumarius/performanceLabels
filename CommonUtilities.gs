@@ -318,3 +318,54 @@ function upsertAccountDataRow(spreadsheet, sheetName, data) {
     sheet.appendRow(rowData);
   }
 }
+
+// =========================================================================================
+// --- URL and Network Helper Functions ---
+// =========================================================================================
+
+/**
+ * Ensures a URL string starts with https://.
+ * @param {string} url The URL to check.
+ * @returns {string} The URL with https:// prefix if needed, or empty string if input is invalid.
+ */
+function ensureHttps(url) {
+  if (!url || typeof url !== 'string') return "";
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+  if (trimmed.toLowerCase().startsWith("http")) return trimmed;
+  return "https://" + trimmed;
+}
+
+/**
+ * Generic helper function to fetch JSON data from an endpoint with retries and exponential backoff.
+ * @param {string} endpoint The full URL for the API endpoint.
+ * @param {object} options The options for UrlFetchApp.fetch().
+ * @param {number} [retries=3] Number of retry attempts.
+ * @return {Array|object|null} The parsed JSON response, or null on failure.
+ */
+function fetchJsonWithRetries(endpoint, options, retries = 3) {
+  const fetchOptions = { ...options, muteHttpExceptions: true };
+
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = UrlFetchApp.fetch(endpoint, fetchOptions);
+      const responseCode = response.getResponseCode();
+      const responseText = response.getContentText();
+
+      if (responseCode >= 200 && responseCode < 300) {
+        return JSON.parse(responseText);
+      } else {
+        Logger.log(`API Error (Attempt ${i + 1}/${retries}): ${responseCode} for ${endpoint.substring(0, 100)}...`);
+        if (responseCode === 401 || responseCode === 403) {
+          throw new Error(`Authorization error (${responseCode}). Check API keys and permissions.`);
+        }
+        // Exponential backoff
+        if (i < retries - 1) Utilities.sleep(1000 * Math.pow(2, i));
+      }
+    } catch (e) {
+      Logger.log(`Fetch Exception (Attempt ${i + 1}/${retries}): ${e.message} for ${endpoint.substring(0, 100)}...`);
+      if (i === retries - 1) throw e;
+    }
+  }
+  throw new Error(`Failed to fetch data from ${endpoint.substring(0, 100)}... after ${retries} attempts.`);
+}

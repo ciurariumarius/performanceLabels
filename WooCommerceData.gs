@@ -40,12 +40,11 @@ function runWooCommerceReport() {
 
     // Assumes CommonUtilities.gs is available
     const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(configSheet);
-    const rawShopUrl = getConfigValue(SCRIPT_CONFIGS, "WooCommerce Domain", 'string');
-    const shopUrl = rawShopUrl && !rawShopUrl.startsWith("http") ? "https://" + rawShopUrl : rawShopUrl;
+    const shopUrl = ensureHttps(getConfigValue(SCRIPT_CONFIGS, "WooCommerce Domain", 'string'));
     const days = getConfigValue(SCRIPT_CONFIGS, "Timeframe", 'int', 30);
     const consumerKey = getConfigValue(SCRIPT_CONFIGS, "WooCommerce API Key", 'string');
     const consumerSecret = getConfigValue(SCRIPT_CONFIGS, "WooCommerce API Secret", 'string');
-
+    
     if (!shopUrl || !consumerKey || !consumerSecret) {
       throw new Error(`"WooCommerce Domain", "API Key", or "API Secret" is missing in '${WOO_CONFIG_SHEET_NAME}'.`);
     }
@@ -83,7 +82,8 @@ function fetchAndProcessProducts_Woo_(shopUrl, authHeader) {
 
   while (true) {
     const endpoint = `${shopUrl}/wp-json/wc/v3/products?page=${page}&per_page=${WOO_PRODUCTS_PER_PAGE}&_fields=id,name,price,stock_status,stock_quantity,categories,date_created_gmt`;
-    const productBatch = fetchWooDataWithRetries_(endpoint, { headers: authHeader });
+    // Use generic fetch with retries from CommonUtilities.gs
+    const productBatch = fetchJsonWithRetries(endpoint, { headers: authHeader }, WOO_API_RETRIES);
 
     if (!productBatch || productBatch.length === 0) break;
 
@@ -135,7 +135,8 @@ function processOrders_Woo_(shopUrl, authHeader, days, productDataMap) {
 
   while (true) {
     const endpoint = `${shopUrl}/wp-json/wc/v3/orders?status=completed,processing&after=${startDate.toISOString()}&page=${page}&per_page=${WOO_ORDERS_PER_PAGE}&_fields=id,status,line_items,date_created_gmt`;
-    const orders = fetchWooDataWithRetries_(endpoint, { headers: authHeader });
+    // Use generic fetch with retries from CommonUtilities.gs
+    const orders = fetchJsonWithRetries(endpoint, { headers: authHeader }, WOO_API_RETRIES);
 
     if (!orders || orders.length === 0) break;
 
@@ -185,39 +186,7 @@ function processOrders_Woo_(shopUrl, authHeader, days, productDataMap) {
   return { productDataMap, summary };
 }
 
-/**
- * Generic helper function to fetch data from a WooCommerce endpoint with retries.
- * @private
- * @param {string} endpoint The full URL for the API endpoint.
- * @param {object} options The options for UrlFetchApp.fetch().
- * @return {Array|object|null} The parsed JSON response, or null on failure.
- */
-function fetchWooDataWithRetries_(endpoint, options) {
-  options.muteHttpExceptions = true; // Handle errors manually
 
-  for (let i = 0; i < WOO_API_RETRIES; i++) {
-    try {
-      const response = UrlFetchApp.fetch(endpoint, options);
-      const responseCode = response.getResponseCode();
-      const responseText = response.getContentText();
-
-      if (responseCode >= 200 && responseCode < 300) {
-        return JSON.parse(responseText);
-      } else {
-        Logger.log(`API Error (Attempt ${i + 1}/${WOO_API_RETRIES}): ${responseCode} for ${endpoint.substring(0, 100)}...`);
-        if (responseCode === 401 || responseCode === 403) {
-          throw new Error(`Authorization error (${responseCode}). Check API keys and permissions.`);
-        }
-        // Exponential backoff for other server errors
-        if (i < WOO_API_RETRIES - 1) Utilities.sleep(1000 * Math.pow(2, i));
-      }
-    } catch (e) {
-      Logger.log(`Fetch Exception (Attempt ${i + 1}/${WOO_API_RETRIES}): ${e.message} for ${endpoint.substring(0, 100)}...`);
-      if (i === WOO_API_RETRIES - 1) throw e; // Rethrow on the last attempt
-    }
-  }
-  throw new Error(`Failed to fetch data from ${endpoint.substring(0, 100)}... after ${WOO_API_RETRIES} attempts.`);
-}
 
 
 /**
