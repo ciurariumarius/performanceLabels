@@ -1,159 +1,61 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <base target="_blank">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
-  <style>
-    body {
-      font-family: 'Inter', sans-serif;
-      padding: 16px;
-      color: #333;
-      font-size: 14px;
-      line-height: 1.5;
-    }
-    h1 {
-      font-size: 20px;
-      font-weight: 700;
-      margin-bottom: 8px;
-      color: #1a73e8;
-    }
-    h2 {
-      font-size: 16px;
-      font-weight: 600;
-      margin-top: 24px;
-      margin-bottom: 8px;
-      border-bottom: 1px solid #eee;
-      padding-bottom: 4px;
-    }
-    h3 {
-      font-size: 14px;
-      font-weight: 600;
-      margin-top: 16px;
-      margin-bottom: 4px;
-      color: #555;
-    }
-    p {
-      margin-bottom: 12px;
-    }
-    ul, ol {
-      padding-left: 20px;
-      margin-bottom: 12px;
-    }
-    li {
-      margin-bottom: 4px;
-    }
-    code {
-      background-color: #f1f3f4;
-      padding: 2px 4px;
-      border-radius: 4px;
-      font-family: monospace;
-      font-size: 12px;
-    }
-    pre {
-      background-color: #f1f3f4;
-      padding: 12px;
-      border-radius: 8px;
-      overflow-x: auto;
-      white-space: pre-wrap;
-      font-size: 11px;
-    }
-    .callout {
-      background-color: #e8f0fe;
-      border-left: 4px solid #1a73e8;
-      padding: 12px;
-      margin-bottom: 16px;
-      border-radius: 0 4px 4px 0;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 16px;
-      font-size: 12px;
-    }
-    th, td {
-      text-align: left;
-      padding: 8px;
-      border-bottom: 1px solid #eee;
-    }
-    th {
-      font-weight: 600;
-      color: #555;
-    }
-    .btn {
-      display: inline-block;
-      padding: 8px 16px;
-      background-color: #1a73e8;
-      color: white;
-      text-decoration: none;
-      border-radius: 4px;
-      font-weight: 600;
-      margin-top: 8px;
-    }
-  </style>
-</head>
-<body>
+<!-- 
+PERFORMANCE LABELS DOCUMENTATION
+================================
 
-  <h1>Performance Labels</h1>
-  <p><strong>Automated Product Segmentation System v3.0</strong></p>
-  <p>This tool automatically labels your products for Google Merchant Center based on data from Shopify/WooCommerce and Google Ads.</p>
+Automated Product Segmentation System v3.0
+------------------------------------------
+This tool automatically labels your products for Google Merchant Center.
 
-  <div class="callout">
-    <strong>🚀 Quick Actions</strong><br>
-    Use the <strong>"Performance Labels"</strong> menu in the toolbar to run fetch or update actions manually.
-  </div>
+*** START HERE ***
+To see the "Performance Labels" menu:
+1. Refresh this Spreadsheet page.
+2. Wait a few seconds for the menu to appear in the top bar.
+3. Use the menu to "Show Documentation" or run tools.
+******************
 
-  <h2>⚙️ 1. Configuration</h2>
-  <p>Control everything from the <code>Config</code> sheet. No code changes needed.</p>
-  
-  <h3>Merchant Center Mapping</h3>
-  <p>Map internal IDs (Col A) to your output columns (Col B).</p>
-  
-  <table>
-    <thead>
-      <tr>
-        <th>Internal ID</th>
-        <th>Output Header</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr><td><code>LABEL_REVENUE_ADVANCED</code></td><td><code>custom_label_0</code></td></tr>
-      <tr><td><code>LABEL_TREND</code></td><td><code>custom_label_1</code></td></tr>
-      <tr><td><code>LABEL_NEW</code></td><td><code>custom_label_2</code></td></tr>
-      <tr><td><code>LABEL_PRICE_INTERVAL</code></td><td><code>custom_label_3</code></td></tr>
-      <tr><td><code>LABEL_AVAILABLE_VARIANTS</code></td><td><code>custom_label_4</code></td></tr>
-      <tr><td><code>LABEL_GADS_ROAS</code></td><td><code>custom_label_5</code></td></tr>
-      <tr><td><code>LABEL_GADS_CONV_RATE</code></td><td><code>custom_label_6</code></td></tr>
-      <tr><td><code>LABEL_GADS_CLICKS</code></td><td><code>custom_label_7</code></td></tr>
-    </tbody>
-  </table>
 
-  <h3>Thresholds</h3>
-  <ul>
-    <li><strong>Timeframe</strong>: <code>30</code> (Analysis window in days).</li>
-    <li><strong>High Revenue Threshold</strong>: <code>150</code> (% of average).</li>
-    <li><strong>Nr. of Orders Threshold</strong>: <code>50</code> (Volume cutoff).</li>
-  </ul>
+1. CONFIGURATION
+----------------
+Control everything from the 'Config' sheet.
 
-  <h2>🛠️ 2. Google Ads Setup</h2>
-  <p>To get ROAS and Clicks data:</p>
-  <ol>
-    <li>Copy the code from <code>google_ads_script_export.js</code>.</li>
-    <li>Go to Google Ads > Tools > Scripts.</li>
-    <li>Paste the code and set the <code>SPREADSHEET_URL</code> variable.</li>
-    <li>Schedule it Daily (e.g., 4:00 AM).</li>
-  </ol>
+[Merchant Center Mapping]
+Map these Internal IDs (Col A) to your Custom Label columns (Col B):
+- LABEL_REVENUE_ADVANCED : Revenue Tier (High/Avg/Low)
+- LABEL_TREND            : Sales Trend (Up/Down)
+- LABEL_NEW              : New Product Label
+- LABEL_PRICE_INTERVAL   : Price Range
+- LABEL_AVAILABLE_VARIANTS : Stock Ratio
+- LABEL_GADS_ROAS        : Google Ads ROAS
+- LABEL_GADS_CONV_RATE   : Google Ads CVR
+- LABEL_GADS_CLICKS      : Google Ads Clicks
 
-  <h2>⚡ 3. Automation Setup</h2>
-  <p>To enable the daily schedule:</p>
-  <ol>
-    <li>Open Apps Script Editor (Extensions > Apps Script).</li>
-    <li>Open <code>TriggerSetup.gs</code>.</li>
-    <li>Run <code>setupShopifyComplete</code> (or WooCommerce equivalent).</li>
-  </ol>
-  <p>This schedules data fetching for <strong>5:00 AM</strong> daily.</p>
+[Thresholds]
+- Timeframe: Days to analyze (e.g., 30).
+- High Revenue Threshold: % of average (e.g., 150).
+- Nr. of Orders Threshold: Volume cutoff (e.g., 50).
 
-  <h2>📊 Where is my data?</h2>
-  <p><strong>Labels Feed Sheet</strong>: This is your final output. Connect this sheet to Google Merchant Center as a "Supplemental Feed" using the <code>id</code> column to match products.</p>
 
-</body>
-</html>
+2. GOOGLE ADS SETUP
+-------------------
+To get ROAS and Clicks data:
+1. Open 'GoogleAdsData.gs' in this editor.
+2. Copy the entire code.
+3. Go to Google Ads > Tools > Scripts.
+4. Paste the code and set the 'SPREADSHEET_URL' variable.
+5. Schedule it Daily (e.g., 4:00 AM).
+
+
+3. AUTOMATION SETUP
+-------------------
+To enable the daily schedule:
+1. Open 'TriggerSetup.gs' in this editor.
+2. Run 'setupShopifyComplete' (or 'setupWooCommerceComplete').
+* This schedules fetching for 5:00 AM daily.
+
+
+4. MANUAL USAGE
+---------------
+Use the "Performance Labels" menu in the spreadsheet toolbar to:
+- Fetch Data: Pull fresh data immediately.
+- Update All Labels: Re-calculate labels on existing data.
+-->
