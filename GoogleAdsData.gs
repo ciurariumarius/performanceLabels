@@ -9,7 +9,7 @@
  */
 
 // --- Configuration ---
-// Please set the spreadsheet URL here manually or fetch it if needed.
+// Please set the spreadsheet URL here manually.
 const SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1HO82WNMbtO6-_UYqSOsBjF-s3WYNdW5bhyGAZUW3S2E/edit?gid=0#gid=0";
 const CONFIG_SHEET_NAME = "Config";
 const GADS_SHEET_NAME = "GAds";
@@ -52,8 +52,9 @@ function main() {
     
     Logger.log(`Fetched ${rows.length} rows from Google Ads.`);
 
-    // 3. Process Data (Aggregation only)
-    const productData = aggregateProductData(rows);
+    // 3. Process Data (Aggregation)
+    // We calculate account totals simultaneously to avoid re-parsing formatted strings later
+    const { productData, totals } = aggregateProductDataAndTotals(rows);
     
     // 4. Push to Spreadsheet
     // Headers: id, Title, Type L1, Impressions, Clicks, Cost, Conversions, Conv Value
@@ -71,24 +72,15 @@ function main() {
     pushToSpreadsheet(productData, GADS_SHEET_NAME, headers);
 
     // --- 5. Log to AccountData ---
-    // Calculate total cost and clicks for the log
-    let totalCost = 0;
-    
-    // row[5] is Cost (index 5 in the array created in aggregateProductData)
-    // p.cost is at index 5
-    productData.forEach(row => {
-      totalCost += parseFloat(row[5] || 0);
-    });
-
     const accountName = AdsApp.currentAccount().getName();
 
     upsertAccountDataRow(SpreadsheetApp.openByUrl(SPREADSHEET_URL), "AccountData", {
       source: `Google Ads - ${accountName}`,
       timeframe: `Last ${config.DAYS} Days`,
-      revenue: "-", // We are tracking Cost mainly
-      cost: totalCost.toFixed(2),
-      orders: "-",
-      oosCount: "-",
+      revenue: totals.convValue.toFixed(2), // Revenue = Conversion Value
+      cost: totals.cost.toFixed(2),
+      orders: Math.round(totals.conversions), // Orders = Conversions
+      oosCount: "-", // Not tracked in GAds
       oosPercent: "-"
     });
 
@@ -159,11 +151,31 @@ function upsertAccountDataRow(spreadsheet, sheetName, data) {
  * @param {Array<Object>} rows - GAQL result rows.
  * @returns {Array<Array<any>>} - Aggregated data for the sheet.
  */
-function aggregateProductData(rows) {
+/**
+ * Aggregates raw data by product ID and calculates global totals.
+ * @param {Array<Object>} rows - GAQL result rows.
+ * @returns {Object} - { productData: Array, totals: Object }
+ */
+function aggregateProductDataAndTotals(rows) {
   const prod = {};
+  const totals = {
+    cost: 0,
+    conversions: 0,
+    convValue: 0
+  };
 
   for (const row of rows) {
     const id = row['segments.product_item_id'];
+    
+    // Parse metrics safely
+    const cost = parseFloat(row['metrics.cost_micros'] || 0) / 1000000;
+    const conv = parseFloat(row['metrics.conversions'] || 0);
+    const val = parseFloat(row['metrics.conversions_value'] || 0);
+
+    // Update Totals
+    totals.cost += cost;
+    totals.conversions += conv;
+    totals.convValue += val;
 
     if (!prod[id]) {
       prod[id] = {
@@ -178,15 +190,15 @@ function aggregateProductData(rows) {
       };
     }
 
-    prod[id].impressions += parseFloat(row['metrics.impressions']);
-    prod[id].clicks += parseFloat(row['metrics.clicks']);
-    prod[id].cost += parseFloat(row['metrics.cost_micros']) / 1000000;
-    prod[id].conversions += parseFloat(row['metrics.conversions']);
-    prod[id].conversionValue += parseFloat(row['metrics.conversions_value']);
+    prod[id].impressions += parseFloat(row['metrics.impressions'] || 0);
+    prod[id].clicks += parseFloat(row['metrics.clicks'] || 0);
+    prod[id].cost += cost;
+    prod[id].conversions += conv;
+    prod[id].conversionValue += val;
   }
 
-  // Convert object to array
-  return Object.values(prod).map(p => [
+  // Convert object to array for sheet
+  const productData = Object.values(prod).map(p => [
     p.id,
     p.title,
     p.typeL1,
@@ -196,6 +208,8 @@ function aggregateProductData(rows) {
     p.conversions.toFixed(2),
     p.conversionValue.toFixed(2)
   ]);
+  
+  return { productData, totals };
 }
 
 /**
@@ -259,3 +273,5 @@ function last_n_days(n) {
   const formattedStartDate = Utilities.formatDate(startDate, AdsApp.currentAccount().getTimeZone(), "yyyyMMdd");
   return `${formattedStartDate},${endDate}`;
 }
+
+
