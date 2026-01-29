@@ -1,254 +1,453 @@
 /**
  * @file WooCommerceData.gs
- * @description Fetches product and order data from a WooCommerce store via its REST API.
- * Optimized for daily background execution, it processes the data and writes detailed
- * product information and an account summary to the spreadsheet.
- * Relies on CommonUtilities.gs for all shared utility functions.
- *
- * Changelog (v2.1 - Bug Fix):
- * - Corrected a critical error where this script was incorrectly calling a function from ShopifyData.gs.
- *
- * Changelog (v2.0 - Optimized):
- * - Refactored into smaller, single-responsibility functions for fetching, processing, and writing.
- * - Added a main try-catch block for robust error handling.
- * - Centralized API call logic with retries and exponential backoff.
+ * @description Enterprise-grade WooCommerce fetcher (v4.1 - Updated Headers).
+ * Features: 
+ * - "Worker" pattern for infinite runtime.
+ * - Parallel Fetching (5 pages/batch).
+ * - Resume-able Writer (Prevents timeouts).
+ * - Thread Safe (LockService).
+ * - Integrated with CommonUtilities for config and logging.
  */
 
-// --- Script-level Constants ---
+'use strict';
+
+// --- Configuration ---
 const WOO_CONFIG_SHEET_NAME = "Config";
-const WOO_ACCOUNT_DATA_SHEET_NAME = "AccountData";
-const WOOCOMMERCE_DATA_SHEET_NAME = "WooCommerce";
+const WOO_DATA_SHEET_NAME = "WooCommerce";
+const WOO_ACCOUNT_SHEET_NAME = "AccountData";
+const TEMP_FILENAME = "temp_woo_batch_data.json"; 
 
-// --- API Configuration ---
-const WOO_PRODUCTS_PER_PAGE = 100;
-const WOO_ORDERS_PER_PAGE = 100;
-const WOO_API_RETRIES = 3;
-
+// Execution Safety: Run for 4 mins, leaving a 2m buffer before the 6m limit.
+const MAX_EXECUTION_TIME_MS = 1000 * 60 * 4; 
+const WOO_PAGE_SIZE = 100;
+const PARALLEL_REQUESTS = 5; 
 
 /**
- * Main orchestrator function to run the WooCommerce report generation process.
+ * TRIGGER 1 (DAILY): Starts the job.
+ * Sets the initial state and flags the worker to start.
  */
-function runWooCommerceReport() {
+function startWooCommerceReport() {
+  const lock = LockService.getScriptLock();
+  // Wait up to 30s to ensure no worker is currently writing to the file
+  if (!lock.tryLock(30000)) {
+    console.error("Could not obtain lock to start report.");
+    return;
+  }
+
   try {
-    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    resetScript_(); 
 
-    // --- 1. Load and Validate Configuration ---
-    const configSheet = spreadsheet.getSheetByName(WOO_CONFIG_SHEET_NAME);
-    if (!configSheet) {
-      throw new Error(`Configuration sheet "${WOO_CONFIG_SHEET_NAME}" does not exist.`);
-    }
+    const startState = {
+      phase: 'FETCH_PRODUCTS',
+      page: 1,
+      writeStartIndex: 0, // Tracks writing progress for resume capability
+      startTime: new Date().getTime(),
+      uniqueOrdersCount: 0,
+      totalRevenue: 0,
+      totalItemsSold: 0,
+      status: "Starting..."
+    };
 
-    // Assumes CommonUtilities.gs is available
-    const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(configSheet);
-    const shopUrl = ensureHttps(getConfigValue(SCRIPT_CONFIGS, "WooCommerce Domain", 'string'));
-    const days = getConfigValue(SCRIPT_CONFIGS, "Timeframe", 'int', 30);
-    const consumerKey = getConfigValue(SCRIPT_CONFIGS, "WooCommerce API Key", 'string');
-    const consumerSecret = getConfigValue(SCRIPT_CONFIGS, "WooCommerce API Secret", 'string');
+    const props = PropertiesService.getScriptProperties();
+    props.setProperty('WOO_BATCH_STATE', JSON.stringify(startState));
+    props.setProperty('WOO_WORKER_STATUS', 'ACTIVE'); 
     
-    if (!shopUrl || !consumerKey || !consumerSecret) {
-      throw new Error(`"WooCommerce Domain", "API Key", or "API Secret" is missing in '${WOO_CONFIG_SHEET_NAME}'.`);
-    }
-    if (days <= 0) {
-      throw new Error(`"Timeframe" must be a positive number in '${WOO_CONFIG_SHEET_NAME}'.`);
-    }
+    // Initialize empty data container
+    saveDataToDrive_({}); 
     
-    Logger.log(`WooCommerce Report Config: Domain ${shopUrl}, Timeframe ${days} days.`);
-    const authHeader = { "Authorization": "Basic " + Utilities.base64Encode(consumerKey + ":" + consumerSecret) };
-
-    // --- 2. Fetch and Process Data ---
-    const productDataMap = fetchAndProcessProducts_Woo_(shopUrl, authHeader);
-    const orderProcessingResults = processOrders_Woo_(shopUrl, authHeader, days, productDataMap);
+    logStatus_("STARTED", "Job initialized. Worker will begin shortly.");
+    try { SpreadsheetApp.getActiveSpreadsheet().toast("Daily Job Initiated."); } catch(e) {}
     
-    // --- 3. Write Results to Sheets ---
-    writeResultsToSheets_Woo_(spreadsheet, orderProcessingResults.productDataMap, orderProcessingResults.summary);
-
-    Logger.log("WooCommerce report generation completed successfully!");
+    // Kick off the first worker immediately
+    processBatchWorker();
 
   } catch (e) {
-    Logger.log(`CRITICAL ERROR in runWooCommerceReport: ${e.message}\nStack: ${e.stack}`);
+    console.error("Error starting report: " + e.message);
+    logStatus_("ERROR", "Start failed: " + e.message);
+  } finally {
+    lock.releaseLock();
   }
 }
 
 /**
- * Fetches all products from WooCommerce and initializes a map for data processing.
- * @private
- * @param {string} shopUrl The base URL of the WooCommerce store.
- * @param {object} authHeader The authorization header for API calls.
- * @return {Map<number, object>} A map where keys are product IDs and values are product data objects.
+ * TRIGGER 2 (EVERY 5 MINS): The Worker.
+ * Checks for work, locks the script, and executes a batch.
  */
-function fetchAndProcessProducts_Woo_(shopUrl, authHeader) {
-  const productDataMap = new Map();
-  let page = 1;
+function processBatchWorker() {
+  const props = PropertiesService.getScriptProperties();
+  const status = props.getProperty('WOO_WORKER_STATUS');
 
-  while (true) {
-    const endpoint = `${shopUrl}/wp-json/wc/v3/products?page=${page}&per_page=${WOO_PRODUCTS_PER_PAGE}&_fields=id,name,price,stock_status,stock_quantity,categories,date_created_gmt`;
-    // Use generic fetch with retries from CommonUtilities.gs
-    const productBatch = fetchJsonWithRetries(endpoint, { headers: authHeader }, WOO_API_RETRIES);
+  // Exit immediately if no job is active to save quota
+  if (status !== 'ACTIVE') return; 
 
-    if (!productBatch || productBatch.length === 0) break;
+  // Prevent race conditions (Worker vs Worker)
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return; 
 
-    productBatch.forEach(product => {
-      let categoryName = "N/A";
-      if (product.categories && product.categories.length > 0) {
-        const topLevelCategory = product.categories.find(cat => cat.parent === 0);
-        categoryName = (topLevelCategory || product.categories[0])?.name || "N/A";
-      }
-
-      productDataMap.set(product.id, {
-        name: product.name || "N/A",
-        category: categoryName,
-        price: parseFloatSafe(product.price, 0.0),
-        stockStatus: product.stock_status || "unknown",
-        stockQuantity: parseIntSafe(product.stock_quantity, 0),
-        dateCreated: product.date_created_gmt || null,
-        totalRevenue: 0,
-        uniqueOrderIds: new Set(),
-        totalItemsSold: 0,
-        revenueLast14Days: 0,
-      });
-    });
-
-    if (productBatch.length < WOO_PRODUCTS_PER_PAGE) break;
-    page++;
+  try {
+    console.log("Worker executing...");
+    processBatchCore_();
+  } catch (e) {
+    console.error("Worker Error: " + e.message);
+    logStatus_("ERROR", e.message);
+  } finally {
+    lock.releaseLock();
   }
-
-  Logger.log(`Fetched and initialized ${productDataMap.size} products.`);
-  return productDataMap;
 }
 
 /**
- * Fetches orders within the timeframe and updates the product data map with revenue and sales data.
- * @private
- * @param {string} shopUrl The base URL of the WooCommerce store.
- * @param {object} authHeader The authorization header for API calls.
- * @param {number} days The number of days back to fetch orders.
- * @param {Map<number, object>} productDataMap The map of product data to be updated.
- * @return {{productDataMap: Map<number, object>, summary: object}} The updated product map and summary totals.
+ * MANUAL OVERRIDE: Forces the worker to run immediately.
+ * useful for testing or unblocking a stuck job.
  */
-function processOrders_Woo_(shopUrl, authHeader, days, productDataMap) {
-  const currentDate = new Date();
-  const startDate = new Date(currentDate.getTime() - days * 24 * 60 * 60 * 1000);
-  const fourteenDaysAgoDate = new Date(currentDate.getTime() - 14 * 24 * 60 * 60 * 1000);
+function forceResumeWooCommerceReport() {
+  PropertiesService.getScriptProperties().setProperty('WOO_WORKER_STATUS', 'ACTIVE');
+  processBatchWorker();
+}
+
+/**
+ * CORE LOGIC ENGINE
+ * Handles the state machine: Fetch Products -> Fetch Orders -> Write Data
+ */
+function processBatchCore_() {
+  const executionStart = new Date().getTime();
+  const scriptProperties = PropertiesService.getScriptProperties();
+  let state = JSON.parse(scriptProperties.getProperty('WOO_BATCH_STATE'));
   
-  const uniqueOrdersOverall = new Set();
-  let page = 1;
+  if (!state) {
+    scriptProperties.setProperty('WOO_WORKER_STATUS', 'IDLE');
+    return;
+  }
 
-  while (true) {
-    const endpoint = `${shopUrl}/wp-json/wc/v3/orders?status=completed,processing&after=${startDate.toISOString()}&page=${page}&per_page=${WOO_ORDERS_PER_PAGE}&_fields=id,status,line_items,date_created_gmt`;
-    // Use generic fetch with retries from CommonUtilities.gs
-    const orders = fetchJsonWithRetries(endpoint, { headers: authHeader }, WOO_API_RETRIES);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const config = loadWooConfig_(ss);
+    let productMap = loadDataFromDrive_(); 
 
-    if (!orders || orders.length === 0) break;
+    // --- PHASE 1: FETCH PRODUCTS (PARALLEL) ---
+    if (state.phase === 'FETCH_PRODUCTS') {
+      logStatus_("RUNNING", `Fetching Products (Page ${state.page})...`);
+      
+      let hasMore = true;
+      while (hasMore) {
+        if (isTimeUp_(executionStart)) break;
 
-    orders.forEach(order => {
-      uniqueOrdersOverall.add(order.id);
-      const orderCreatedAt = new Date(order.date_created_gmt + "Z");
-
-      order.line_items?.forEach(item => {
-        const productInfo = productDataMap.get(item.product_id);
-        if (productInfo) {
-          const itemRevenue = parseFloatSafe(item.total, 0.0);
-          const itemQuantity = parseIntSafe(item.quantity, 0);
-
-          productInfo.totalRevenue += itemRevenue;
-          productInfo.totalItemsSold += itemQuantity;
-          productInfo.uniqueOrderIds.add(order.id);
-
-          if (orderCreatedAt >= fourteenDaysAgoDate) {
-            productInfo.revenueLast14Days += itemRevenue;
-          }
+        const requests = [];
+        for (let i = 0; i < PARALLEL_REQUESTS; i++) {
+          const pageNum = state.page + i;
+          const url = `${config.shopUrl}/wp-json/wc/v3/products?page=${pageNum}&per_page=${WOO_PAGE_SIZE}&_fields=id,name,price,stock_status,stock_quantity,categories,date_created_gmt`;
+          requests.push({ url: url, method: "get", headers: config.authHeader, muteHttpExceptions: true });
         }
-      });
-    });
 
-    if (orders.length < WOO_ORDERS_PER_PAGE) break;
-    page++;
-  }
-  
-  Logger.log(`Processed ${uniqueOrdersOverall.size} unique orders.`);
-  
-  // Calculate final summary totals
-  const summary = {
-    shopUrl: shopUrl, // Added for logging context
-    totalRevenue: 0,
-    totalItemsSold: 0,
-    totalUniqueOrders: uniqueOrdersOverall.size,
-    totalProducts: productDataMap.size,
-    timeframeText: formatDisplayDateRange(days), // From CommonUtilities
-    lastRunText: formatDisplayDateTime(new Date()), // From CommonUtilities
-  };
+        const responses = UrlFetchApp.fetchAll(requests);
+        let batchHasData = false;
 
-  for (const product of productDataMap.values()) {
-    summary.totalRevenue += product.totalRevenue;
-    summary.totalItemsSold += product.totalItemsSold;
-  }
+        responses.forEach(res => {
+          if (res.getResponseCode() === 200) {
+            const products = JSON.parse(res.getContentText());
+            if (products.length > 0) {
+              batchHasData = true;
+              products.forEach(p => {
+                let cat = "N/A";
+                if (p.categories && p.categories.length > 0) cat = p.categories[0].name;
+                productMap[p.id] = {
+                  id: p.id, name: p.name, category: cat, price: parseFloatSafe(p.price), // Use CommonUtilities
+                  stockStatus: p.stock_status, stockQty: parseIntSafe(p.stock_quantity), // Use CommonUtilities
+                  dateCreated: p.date_created_gmt,
+                  rev: 0, sold: 0, orders: 0, rev14: 0
+                };
+              });
+            }
+          }
+        });
 
-  return { productDataMap, summary };
-}
-
-
-
-
-/**
- * Writes all fetched and processed data to the respective sheets.
- * @private
- * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet The active spreadsheet object.
- * @param {Map<number, object>} productDataMap The final map of processed product data.
- * @param {object} summary The final summary data for the account.
- */
-function writeResultsToSheets_Woo_(spreadsheet, productDataMap, summary) {
-  // --- Write to WooCommerce Sheet ---
-  const productSheet = getOrCreateSheet(spreadsheet, WOOCOMMERCE_DATA_SHEET_NAME);
-  productSheet.clear(); // Clear everything including formatting
-  
-  const productHeaders = [
-    "Product ID", "Product Name", "Product Category", "Product Price", "Date Created",
-    "Total Orders", "Total Items Sold", "Total Revenue", "Revenue last 14 days",
-    "Stock Status", "Stock Quantity"
-  ];
-  productSheet.getRange(1, 1, 1, productHeaders.length).setValues([productHeaders]).setFontWeight("bold").setHorizontalAlignment("center");
-  
-  const productList = Array.from(productDataMap.entries()).map(([id, p]) => [
-    id, p.name, p.category, p.price, p.dateCreated,
-    p.uniqueOrderIds.size, p.totalItemsSold, p.totalRevenue, p.revenueLast14Days,
-    p.stockStatus, p.stockQuantity
-  ]).sort((a, b) => b[7] - a[7]); // Sort by Total Revenue (index 7)
-
-  if (productList.length > 0) {
-    const range = productSheet.getRange(2, 1, productList.length, productHeaders.length);
-    range.setValues(productList);
-    // Formatting
-    productSheet.getRange(2, 4, productList.length, 1).setNumberFormat('#,##0.00'); // Price
-    productSheet.getRange(2, 8, productList.length, 2).setNumberFormat('#,##0.00'); // Revenues
-  } else {
-    productSheet.getRange(2, 1).setValue("No product data to display.");
-  }
-  
-  // --- Write to AccountData Sheet ---
-  // Calculates OOS items with sales
-  let oosWithSalesCount = 0;
-  let totalWithSalesCount = 0;
-  
-  for (const product of productDataMap.values()) {
-    if (product.totalRevenue > 0) {
-      totalWithSalesCount++;
-      if (product.stockStatus !== "in stock" && product.stockStatus !== "instock") { // Catch various string variations
-        oosWithSalesCount++;
+        if (batchHasData) {
+          state.page += PARALLEL_REQUESTS;
+          logStatus_("RUNNING", `Fetched Products up to Page ${state.page}...`);
+        } else {
+          state.phase = 'FETCH_ORDERS';
+          state.page = 1; 
+          hasMore = false;
+        }
       }
     }
-  }
-  
-  const oosPercent = totalWithSalesCount > 0 
-    ? ((oosWithSalesCount / totalWithSalesCount) * 100).toFixed(1) + "%" 
-    : "0%";
 
-  upsertAccountDataRow(spreadsheet, WOO_ACCOUNT_DATA_SHEET_NAME, {
-    source: `WooCommerce - ${summary.shopUrl}`,
-    timeframe: summary.timeframeText,
-    revenue: summary.totalRevenue,
-    orders: summary.totalUniqueOrders,
-    cost: "-", // Cost not typically available via Woo API
-    oosCount: oosWithSalesCount,
-    oosPercent: oosPercent
-  });
+    // --- PHASE 2: FETCH ORDERS (PARALLEL) ---
+    if (state.phase === 'FETCH_ORDERS' && !isTimeUp_(executionStart)) {
+      logStatus_("RUNNING", `Fetching Orders (Page ${state.page})...`);
+      
+      const startDate = new Date(new Date().getTime() - config.days * 86400000);
+      const day14 = new Date(new Date().getTime() - 14 * 86400000);
+
+      let hasMore = true;
+      while (hasMore) {
+        if (isTimeUp_(executionStart)) break;
+
+        const requests = [];
+        for (let i = 0; i < PARALLEL_REQUESTS; i++) {
+          const pageNum = state.page + i;
+          // Note: Using hardcoded 'completed,processing' as requested
+          const url = `${config.shopUrl}/wp-json/wc/v3/orders?status=completed,processing&after=${startDate.toISOString()}&page=${pageNum}&per_page=${WOO_PAGE_SIZE}&_fields=id,date_created_gmt,line_items`;
+          requests.push({ url: url, method: "get", headers: config.authHeader, muteHttpExceptions: true });
+        }
+
+        const responses = UrlFetchApp.fetchAll(requests);
+        let batchHasData = false;
+
+        responses.forEach(res => {
+          if (res.getResponseCode() === 200) {
+            const orders = JSON.parse(res.getContentText());
+            if (orders.length > 0) {
+              batchHasData = true;
+              orders.forEach(order => {
+                state.uniqueOrdersCount++;
+                const orderDate = new Date(order.date_created_gmt + "Z");
+                if (order.line_items) {
+                  order.line_items.forEach(item => {
+                    const pid = item.product_id;
+                    if (productMap[pid]) {
+                      const lineTotal = parseFloatSafe(item.total);
+                      const qty = parseIntSafe(item.quantity);
+                      productMap[pid].rev += lineTotal;
+                      productMap[pid].sold += qty;
+                      productMap[pid].orders += 1;
+                      state.totalRevenue += lineTotal;
+                      state.totalItemsSold += qty;
+                      if (orderDate >= day14) productMap[pid].rev14 += lineTotal;
+                    }
+                  });
+                }
+              });
+            }
+          }
+        });
+
+        if (batchHasData) {
+          state.page += PARALLEL_REQUESTS;
+          logStatus_("RUNNING", `Fetched Orders up to Page ${state.page}...`);
+        } else {
+          state.phase = 'WRITE_DATA';
+          state.writeStartIndex = 0; // Reset index for the writing phase
+          hasMore = false;
+        }
+      }
+    }
+
+    // --- PHASE 3: WRITE DATA (RESUME-ABLE) ---
+    if (state.phase === 'WRITE_DATA') {
+      
+      const sheet = getOrCreateSheet(ss, WOO_DATA_SHEET_NAME);
+      
+      // Initialize Headers only if starting from the beginning
+      if (state.writeStartIndex === 0) {
+        sheet.clear();
+        const headers = [
+          "Product ID", "Product Name", "Product Category", "Product Price", "Date Created",
+          "Total Orders", "Total Items Sold", "Total Revenue", "Revenue last 14 days",
+          "Stock Status", "Stock Quantity"
+        ];
+        sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold").setHorizontalAlignment("center");
+      }
+
+      // Convert Map to Array & Sort
+      // Sorting is repeated on resume to ensure index consistency.
+      const rows = Object.values(productMap).map(p => [
+        p.id, p.name, p.category, p.price, p.dateCreated,
+        p.orders, p.sold, p.rev, p.rev14, p.stockStatus, p.stockQty
+      ]).sort((a,b) => b[7] - a[7]); // Sort by Revenue (Desc)
+
+      // Only perform writing if there are rows
+      if (rows.length > 0) {
+          const CHUNK_SIZE = 1500; 
+          let doneWriting = true;
+
+          // Start loop from saved index
+          for (let i = state.writeStartIndex; i < rows.length; i += CHUNK_SIZE) {
+            
+            // Check time remaining before writing the next chunk
+            if (isTimeUp_(executionStart)) {
+              logStatus_("PAUSED", `Writing paused at row ${i}. Resuming next tick...`);
+              state.writeStartIndex = i; // Save progress
+              doneWriting = false;
+              break; // Exit loop to save state
+            }
+
+            const chunk = rows.slice(i, i + CHUNK_SIZE);
+            // Calculate target range: Row 2 (headers) + i (current index)
+            sheet.getRange(2 + i, 1, chunk.length, 11).setValues(chunk);
+            SpreadsheetApp.flush(); // Commit changes immediately
+            
+            logStatus_("WRITING", `Writing rows ${i} - ${i+chunk.length}...`);
+          }
+          
+          // Apply formatting once at the end (or we could do it incrementally, but end is safer for performance)
+          if (doneWriting) {
+             sheet.getRange(2, 4, rows.length, 1).setNumberFormat('#,##0.00'); // Price
+             sheet.getRange(2, 8, rows.length, 2).setNumberFormat('#,##0.00'); // Revenues
+          }
+          
+          if (!doneWriting) {
+              // Save state and exit if not done
+              saveDataToDrive_(productMap);
+              props.setProperty('WOO_BATCH_STATE', JSON.stringify(state));
+              return; 
+          }
+      }
+
+      // --- ACCOUNT DATA LOGGING (Integrated Standard) ---
+      // Calculates OOS items with sales
+      let oosWithSalesCount = 0;
+      let totalWithSalesCount = 0;
+      
+      const allProducts = Object.values(productMap);
+      for (const product of allProducts) {
+        if (product.rev > 0) {
+          totalWithSalesCount++;
+          if (product.stockStatus !== "in stock" && product.stockStatus !== "instock") { 
+            oosWithSalesCount++;
+          }
+        }
+      }
+      
+      const oosPercent = totalWithSalesCount > 0 
+        ? ((oosWithSalesCount / totalWithSalesCount) * 100).toFixed(1) + "%" 
+        : "0%";
+
+      upsertAccountDataRow(ss, WOO_ACCOUNT_SHEET_NAME, {
+        source: `WooCommerce - ${config.shopUrl}`,
+        timeframe: formatDisplayDateRange(config.days),
+        revenue: state.totalRevenue,
+        orders: state.uniqueOrdersCount,
+        cost: "-",
+        oosCount: oosWithSalesCount,
+        oosPercent: oosPercent
+      });
+
+      logStatus_("COMPLETED", `Finished at ${new Date().toLocaleTimeString()}`);
+      resetScript_(); // Cleanup
+      scriptProperties.setProperty('WOO_WORKER_STATUS', 'IDLE'); 
+      return;
+    }
+
+    // --- PAUSE & SAVE STATE ---
+    saveDataToDrive_(productMap);
+    scriptProperties.setProperty('WOO_BATCH_STATE', JSON.stringify(state));
+
+  } catch (e) {
+    console.error("Core Process Error: " + e.message);
+    logStatus_("ERROR", e.message);
+  }
 }
+
+// --- UTILITIES ---
+
+/**
+ * Updates the 'AccountData' sheet with the live status of the script.
+ * Places the status box to the right of the data table (Columns J:K).
+ */
+function logStatus_(status, message) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    // Move status logging to AccountData sheet as requested
+    const sheet = ss.getSheetByName(WOO_ACCOUNT_SHEET_NAME); 
+    if (sheet) {
+      // Using range J2:K6 to sit to the right of standard columns (A-H)
+      const range = sheet.getRange("J2:K6"); 
+      range.setBorder(true, true, true, true, true, true);
+      range.setValues([
+        ["WOO WORKER STATUS", status],
+        ["MESSAGE", message],
+        ["LAST UPDATE", new Date().toLocaleTimeString()],
+        ["", ""],
+        ["NOTE", "Refreshes every 5 mins"]
+      ]);
+      const statusCell = sheet.getRange("K2");
+      if (status === "ERROR") statusCell.setBackground("#FFCCCC");
+      else if (status === "COMPLETED") statusCell.setBackground("#CCFFCC");
+      else statusCell.setBackground("#CCFFFF");
+      SpreadsheetApp.flush(); 
+    }
+  } catch(e) {
+    console.warn("Failed to update status sheet: " + e.message);
+  }
+}
+
+/**
+ * Cleans up properties and temporary files after a successful run or reset.
+ */
+function resetScript_() {
+  const props = PropertiesService.getScriptProperties();
+  const fileId = props.getProperty('WOO_TEMP_FILE_ID');
+  if (fileId) {
+    try { DriveApp.getFileById(fileId).setTrashed(true); } catch(e) {}
+    props.deleteProperty('WOO_TEMP_FILE_ID');
+  }
+  props.deleteProperty('WOO_BATCH_STATE');
+}
+
+/**
+ * Checks if the script has exceeded the safe execution time window.
+ */
+function isTimeUp_(startTime) {
+  return (new Date().getTime() - startTime) > MAX_EXECUTION_TIME_MS;
+}
+
+/**
+ * Saves the product data map to Google Drive to persist between batches.
+ * Uses ID-based retrieval to avoid duplicate file issues.
+ */
+function saveDataToDrive_(data) {
+  const content = JSON.stringify(data);
+  const props = PropertiesService.getScriptProperties();
+  const fileId = props.getProperty('WOO_TEMP_FILE_ID');
+  if (fileId) {
+    try { 
+      DriveApp.getFileById(fileId).setContent(content); 
+      return; 
+    } catch (e) {
+      console.warn("Could not write to existing file ID. Creating new file.");
+    }
+  }
+  const file = DriveApp.createFile(TEMP_FILENAME, content, MimeType.PLAIN_TEXT);
+  props.setProperty('WOO_TEMP_FILE_ID', file.getId());
+}
+
+/**
+ * Loads the product data map from Google Drive.
+ */
+function loadDataFromDrive_() {
+  const props = PropertiesService.getScriptProperties();
+  const fileId = props.getProperty('WOO_TEMP_FILE_ID');
+  if (fileId) {
+    try { 
+      return JSON.parse(DriveApp.getFileById(fileId).getBlob().getDataAsString()); 
+    } catch (e) {
+      console.error("Failed to load/parse data from Drive: " + e.message);
+    }
+  }
+  return {};
+}
+
+/**
+ * Loads configuration from the Config sheet using CommonUtilities.
+ */
+function loadWooConfig_(ss) {
+  const sheet = ss.getSheetByName(WOO_CONFIG_SHEET_NAME);
+  if (!sheet) throw new Error(`Sheet "${WOO_CONFIG_SHEET_NAME}" missing.`);
+  
+  const configs = loadConfigurationsFromSheetObject(sheet);
+  const rawUrl = getConfigValue(configs, "WooCommerce Domain", 'string');
+  const shopUrl = ensureHttps(rawUrl);
+  const days = getConfigValue(configs, "Timeframe", 'int', 30);
+  const key = getConfigValue(configs, "WooCommerce API Key", 'string');
+  const secret = getConfigValue(configs, "WooCommerce API Secret", 'string');
+
+  if (!shopUrl || !key || !secret) throw new Error("Missing config.");
+
+  return {
+    shopUrl: shopUrl,
+    days: days,
+    authHeader: { "Authorization": "Basic " + Utilities.base64Encode(key + ":" + secret) }
+  };
+}
+
+
