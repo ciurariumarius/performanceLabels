@@ -43,7 +43,8 @@ function consolidateMetrics(ss) {
   const sourceData = [...shopifyData, ...wooData];
   
   const combinedData = sourceData.map(item => {
-    const gads = gadsMap[item.id] || { imp: 0, click: 0, cost: 0, conv: 0, val: 0 };
+    const safeId = String(item.id).toLowerCase();
+    const gads = gadsMap[safeId] || { imp: 0, click: 0, cost: 0, conv: 0, val: 0 };
     return [
       item.id,
       item.title,
@@ -143,7 +144,7 @@ function loadGAdsDataMap_(sheet) {
   data.forEach(row => {
     const id = row[indices.id];
     if (id) {
-       map[id] = {
+       map[String(id).toLowerCase()] = {
          imp: parseFloatSafe(row[indices.imp]),
          click: parseFloatSafe(row[indices.click]),
          cost: parseFloatSafe(row[indices.cost]),

@@ -102,7 +102,7 @@ function getVariantColumnIndices_(headers) {
 }
 
 /**
- * Extracts the parent product ID from a composite ID string (e.g., "shopify_US_12345_67890" -> "shopify_US_12345").
+ * Extracts the parent product ID from a composite ID string (e.g., "shopify_US_12345_67890" -> "shopify_us_12345").
  * @private
  * @param {string} fullIdString The composite ID.
  * @return {string|null} The extracted parent ID or null if the pattern doesn't match.
@@ -110,7 +110,7 @@ function getVariantColumnIndices_(headers) {
 function extractParentId_(fullIdString) {
   if (!fullIdString || typeof fullIdString !== 'string') return null;
   const match = fullIdString.match(/(.*)_(\d+)$/);
-  return match ? match[1] : fullIdString;
+  return (match ? match[1] : fullIdString).toLowerCase();
 }
 
 /**
