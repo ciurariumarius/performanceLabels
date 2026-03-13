@@ -46,15 +46,26 @@ function startShopifyReport() {
     resetShopifyScript_(); 
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const config = loadShopifyConfig_(ss);
+    let config = loadShopifyConfig_(ss);
+
+    // 2026 Auth: Refresh the token before starting if credentials exist
+    if (config.clientId && config.clientSecret) {
+      console.log("Refreshing Shopify Access Token (2026 Flow)...");
+      const newToken = getShopifyAccessToken_(config.clientId, config.clientSecret, config.domain);
+      if (newToken) {
+        config.accessToken = newToken;
+        PropertiesService.getScriptProperties().setProperty('SHOPIFY_SESSION_TOKEN', newToken);
+        console.log("Token refreshed successfully.");
+      }
+    }
 
     // Initial URLs
-    const productsUrl = `https://${config.domain}/admin/api/${SHOPIFY_API_VERSION}/products.json?limit=${SHOPIFY_ITEMS_PER_PAGE}&fields=id,title,variants,created_at`;
+    const productsUrl = 'https://' + config.domain + '/admin/api/' + SHOPIFY_API_VERSION + '/products.json?limit=' + SHOPIFY_ITEMS_PER_PAGE + '&fields=id,title,variants,created_at';
     
     // Calculate Order timeframe
     const endDate = new Date();
     const startDate = new Date(endDate.getTime() - config.days * 86400000);
-    const ordersUrl = `https://${config.domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json?limit=${SHOPIFY_ITEMS_PER_PAGE}&status=any&created_at_min=${startDate.toISOString()}&fields=id,line_items,created_at,financial_status,cancelled_at`;
+    const ordersUrl = 'https://' + config.domain + '/admin/api/' + SHOPIFY_API_VERSION + '/orders.json?limit=' + SHOPIFY_ITEMS_PER_PAGE + '&status=any&created_at_min=' + startDate.toISOString() + '&fields=id,line_items,created_at,financial_status,cancelled_at';
 
     const startState = {
       phase: 'FETCH_PRODUCTS',
@@ -153,7 +164,7 @@ function processShopifyBatchCore_() {
                   formattedProductId = String(product.id);
                 } else {
                   // 'shopify' format: shopify_COUNTRY_productId_variantId
-                  formattedProductId = `shopify_${config.countryCode}_${product.id}_${variant.id}`;
+                  formattedProductId = 'shopify_' + config.countryCode + '_' + product.id + '_' + variant.id;
                 }
                 const formattedDate = product.created_at ? formatDisplayDateTime(new Date(product.created_at)) : null;
 
@@ -283,7 +294,7 @@ function processShopifyBatchCore_() {
 
           for (let i = state.writeStartIndex; i < rows.length; i += CHUNK_SIZE) {
             if (isShopifyTimeUp_(executionStart)) {
-              logShopifyStatus_("PAUSED", `Writing paused at row ${i}...`);
+              logShopifyStatus_("PAUSED", 'Writing paused at row ' + i + '...');
               state.writeStartIndex = i;
               doneWriting = false;
               break;
@@ -291,7 +302,7 @@ function processShopifyBatchCore_() {
             const chunk = rows.slice(i, i + CHUNK_SIZE);
             sheet.getRange(2 + i, 1, chunk.length, 13).setValues(chunk);
             SpreadsheetApp.flush();
-            logShopifyStatus_("WRITING", `Writing rows ${i} - ${i+chunk.length}...`);
+            logShopifyStatus_("WRITING", 'Writing rows ' + i + ' - ' + (i + chunk.length) + '...');
           }
 
           if (doneWriting) {
@@ -322,7 +333,7 @@ function processShopifyBatchCore_() {
         : "0%";
 
       upsertAccountDataRow(ss, SHOPIFY_ACCOUNT_SHEET_NAME, {
-        source: `Shopify - ${config.domain}`,
+        source: 'Shopify - ' + config.domain,
         timeframe: formatDisplayDateRange(config.days),
         revenue: state.totalRevenue,
         orders: state.uniqueOrdersCount,
@@ -357,7 +368,8 @@ function processShopifyBatchCore_() {
 
 // --- HELPER FUNCTIONS ---
 
-function fetchShopifyUrl_(url, accessToken, retries = 3) {
+function fetchShopifyUrl_(url, accessToken, retries) {
+  if (retries === undefined) retries = 3;
   for (let i = 0; i < retries; i++) {
     try {
       const options = {
@@ -369,7 +381,7 @@ function fetchShopifyUrl_(url, accessToken, retries = 3) {
       const code = response.getResponseCode();
       
       if (code === 429) {
-         console.warn(`Rate limit (429). Retry ${i+1}/${retries}...`);
+         console.warn('Rate limit (429). Retry ' + (i + 1) + '/' + retries + '...');
          Utilities.sleep(1000 * Math.pow(2, i)); 
          continue; 
       }
@@ -378,11 +390,11 @@ function fetchShopifyUrl_(url, accessToken, retries = 3) {
         return { content: response.getContentText(), headers: response.getHeaders() };
       }
       
-      console.warn(`Shopify API Error ${code} (Attempt ${i+1}): ${response.getContentText()}`);
+      console.warn('Shopify API Error ' + code + ' (Attempt ' + (i + 1) + '): ' + response.getContentText());
       if (i < retries - 1) Utilities.sleep(1000 * (i + 1));
       
     } catch (e) {
-      console.warn(`Fetch Exception (Attempt ${i+1}): ${e.message}`);
+      console.warn('Fetch Exception (Attempt ' + (i + 1) + '): ' + e.message);
       if (i < retries - 1) Utilities.sleep(1000 * (i + 1));
     }
   }
@@ -409,23 +421,70 @@ function determineShopifyStockStatus_(variant) {
   return "out of stock";
 }
 
+/**
+ * Exchanges Client Credentials for an Access Token (OAuth 2026 Flow).
+ * Tokens typically expire in 24 hours.
+ */
+function getShopifyAccessToken_(clientId, clientSecret, domain) {
+  const url = 'https://' + domain + '/admin/api/oauth/access_token';
+  const payload = {
+    client_id: clientId,
+    client_secret: clientSecret,
+    grant_type: 'client_credentials'
+  };
+
+  const options = {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const code = response.getResponseCode();
+    const content = response.getContentText();
+
+    if (code === 200) {
+      const data = JSON.parse(content);
+      return data.access_token;
+    } else {
+      console.error('Failed to get Access Token: ' + code + ' - ' + content);
+      return null;
+    }
+  } catch (e) {
+    console.error('Exception during token exchange: ' + e.message);
+    return null;
+  }
+}
+
 function loadShopifyConfig_(ss) {
   const sheet = ss.getSheetByName(SHOPIFY_CONFIG_SHEET_NAME);
   if (!sheet) throw new Error("Shopify Config sheet missing.");
   const configs = loadConfigurationsFromSheetObject(sheet);
   
   const domain = getConfigValue(configs, "Shopify Domain", 'string');
-  const token = getConfigValue(configs, "Shopify accessToken", 'string');
+  
+  // Try to get dynamic token first, fallback to static "Shopify accessToken"
+  let token = PropertiesService.getScriptProperties().getProperty('SHOPIFY_SESSION_TOKEN');
+  if (!token) {
+    token = getConfigValue(configs, "Shopify accessToken", 'string');
+  }
+
+  const clientId = getConfigValue(configs, "Shopify Client ID", 'string');
+  const clientSecret = getConfigValue(configs, "Shopify Client Secret", 'string');
   const days = getConfigValue(configs, "Timeframe", 'int', 30);
   
-  if (!domain || !token) {
-    console.error(`Config Error: Domain="${domain}", TokenLength=${token ? token.length : 0}`);
-    throw new Error("Shopify Domain or Token missing.");
+  if (!domain || (!token && !clientSecret)) {
+    console.error('Config Error: Domain="' + domain + '", TokenFound=' + (!!token) + ', ClientIdFound=' + (!!clientId));
+    throw new Error("Shopify Domain or Credentials missing.");
   }
   
   return { 
     domain, 
     accessToken: token, 
+    clientId: clientId,
+    clientSecret: clientSecret,
     days, 
     countryCode: PRODUCT_COUNTRY_CODE,
     idFormat: PRODUCT_ID_FORMAT

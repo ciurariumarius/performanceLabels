@@ -58,4 +58,30 @@ To enable the daily schedule:
 Use the "Performance Labels" menu in the spreadsheet toolbar to:
 - Fetch Data: Pull fresh data immediately.
 - Update All Labels: Re-calculate labels on existing data.
+
+
+5. SHOPIFY 2026 SETUP
+---------------------
+To move away from deprecated 401-prone static tokens:
+
+1. Partner Dashboard:
+   - Login to partners.shopify.com.
+   - Apps > Create app > Custom App.
+   - Scopes: read_products, read_orders.
+
+2. Get Credentials:
+   - Copy 'Client ID' and 'Client Secret' (Epic Keys).
+
+3. Installation:
+   - Go to 'App distribution' section of the App.
+   - Select 'Custom distribution' and enter store URL.
+   - Generate link, copy it, and open it in your browser.
+   - Authorize installation.
+
+4. Multi-Client:
+   - Use ONE app for all clients.
+   - Repeat step 3 for each new store.
+
+5. Config Sheet:
+   - Add 'Shopify Client ID' and 'Shopify Client Secret' to Config sheet.
 -->
