@@ -23,6 +23,15 @@ const SHOPIFY_ITEMS_PER_PAGE = 250; // Increased page size for efficiency
 const SHOPIFY_API_VERSION = '2024-04';
 
 /**
+ * Product ID format sent to GTM/GA4.
+ * - 'shopify'   => shopify_COUNTRY_productId_variantId
+ * - 'variant_id' => variant ID only
+ * - 'parent_id'  => product ID only
+ */
+const PRODUCT_ID_FORMAT = 'shopify'; 
+const PRODUCT_COUNTRY_CODE = 'ZZ'; 
+
+/**
  * TRIGGER 1 (DAILY): Starts the job.
  * Sets the initial state and flags the worker to start.
  */
@@ -137,7 +146,15 @@ function processShopifyBatchCore_() {
           if (data.products && data.products.length > 0) {
             data.products.forEach(product => {
               product.variants?.forEach(variant => {
-                const formattedProductId = `shopify_${config.countryCode || 'RO'}_${product.id}_${variant.id}`;
+                let formattedProductId;
+                if (config.idFormat === 'variant_id') {
+                  formattedProductId = String(variant.id);
+                } else if (config.idFormat === 'parent_id') {
+                  formattedProductId = String(product.id);
+                } else {
+                  // 'shopify' format: shopify_COUNTRY_productId_variantId
+                  formattedProductId = `shopify_${config.countryCode}_${product.id}_${variant.id}`;
+                }
                 const formattedDate = product.created_at ? formatDisplayDateTime(new Date(product.created_at)) : null;
 
                 productMap[variant.id] = {
@@ -387,7 +404,13 @@ function loadShopifyConfig_(ss) {
   
   if (!domain || !token) throw new Error("Shopify Domain or Token missing.");
   
-  return { domain, accessToken: token, days, countryCode: 'RO' };
+  return { 
+    domain, 
+    accessToken: token, 
+    days, 
+    countryCode: PRODUCT_COUNTRY_CODE,
+    idFormat: PRODUCT_ID_FORMAT
+  };
 }
 
 function logShopifyStatus_(status, message) {
