@@ -180,8 +180,12 @@ function processShopifyBatchCore_() {
           // Pagination: Update next URL from Link header
           state.nextProductUrl = parseShopifyNextLink_(response.headers['Link']);
         } else {
-          // Error or empty response, stop this phase
-          state.nextProductUrl = null; 
+          // INTERRUPT: If response is null after retries, don't clear nextProductUrl.
+          // This allows the NEXT worker tick to try again instead of skipping to orders with 0 products.
+          logShopifyStatus_("PAUSED", "API error during products. Retrying next tick...");
+          saveShopifyDataToDrive_(productMap);
+          PropertiesService.getScriptProperties().setProperty('SHOPIFY_BATCH_STATE', JSON.stringify(state));
+          return; 
         }
       }
 
@@ -240,7 +244,11 @@ function processShopifyBatchCore_() {
 
           state.nextOrderUrl = parseShopifyNextLink_(response.headers['Link']);
         } else {
-          state.nextOrderUrl = null;
+          // INTERRUPT: Stop and wait for next tick on error.
+          logShopifyStatus_("PAUSED", "API error during orders. Retrying next tick...");
+          saveShopifyDataToDrive_(productMap);
+          PropertiesService.getScriptProperties().setProperty('SHOPIFY_BATCH_STATE', JSON.stringify(state));
+          return;
         }
       }
 
@@ -349,28 +357,36 @@ function processShopifyBatchCore_() {
 
 // --- HELPER FUNCTIONS ---
 
-function fetchShopifyUrl_(url, accessToken) {
-  try {
-    const options = {
-      method: 'get',
-      muteHttpExceptions: true,
-      headers: { 'X-Shopify-Access-Token': accessToken }
-    };
-    const response = UrlFetchApp.fetch(url, options);
-    const code = response.getResponseCode();
-    if (code === 429) {
-       Utilities.sleep(2000); // Simple hold for rate limit
-       return null; // Don't crash, just retry next worker tick
+function fetchShopifyUrl_(url, accessToken, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const options = {
+        method: 'get',
+        muteHttpExceptions: true,
+        headers: { 'X-Shopify-Access-Token': accessToken }
+      };
+      const response = UrlFetchApp.fetch(url, options);
+      const code = response.getResponseCode();
+      
+      if (code === 429) {
+         console.warn(`Rate limit (429). Retry ${i+1}/${retries}...`);
+         Utilities.sleep(1000 * Math.pow(2, i)); 
+         continue; 
+      }
+      
+      if (code >= 200 && code < 300) {
+        return { content: response.getContentText(), headers: response.getHeaders() };
+      }
+      
+      console.warn(`Shopify API Error ${code} (Attempt ${i+1}): ${response.getContentText()}`);
+      if (i < retries - 1) Utilities.sleep(1000 * (i + 1));
+      
+    } catch (e) {
+      console.warn(`Fetch Exception (Attempt ${i+1}): ${e.message}`);
+      if (i < retries - 1) Utilities.sleep(1000 * (i + 1));
     }
-    if (code >= 200 && code < 300) {
-      return { content: response.getContentText(), headers: response.getHeaders() };
-    }
-    console.warn(`Shopify API Error ${code}: ${response.getContentText()}`);
-    return null;
-  } catch (e) {
-    console.warn("Fetch Exception: " + e.message);
-    return null;
   }
+  return null;
 }
 
 function parseShopifyNextLink_(linkHeader) {
@@ -402,7 +418,10 @@ function loadShopifyConfig_(ss) {
   const token = getConfigValue(configs, "Shopify accessToken", 'string');
   const days = getConfigValue(configs, "Timeframe", 'int', 30);
   
-  if (!domain || !token) throw new Error("Shopify Domain or Token missing.");
+  if (!domain || !token) {
+    console.error(`Config Error: Domain="${domain}", TokenLength=${token ? token.length : 0}`);
+    throw new Error("Shopify Domain or Token missing.");
+  }
   
   return { 
     domain, 

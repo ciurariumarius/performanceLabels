@@ -60,8 +60,10 @@ function loadConfigurationsFromSheetObject(configSheet) {
       }
     }
     
-    // 3. Save to Cache (10 minutes = 600 seconds)
-    cache.put(cacheKey, JSON.stringify(configurations), 600);
+    // 3. Save to Cache only if we actually found labels
+    if (Object.keys(configurations).length > 0) {
+      cache.put(cacheKey, JSON.stringify(configurations), 600);
+    }
     return configurations;
 
   } catch (e) {
