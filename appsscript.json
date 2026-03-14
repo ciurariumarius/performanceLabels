@@ -1,0 +1,16 @@
+{
+  "timeZone": "Europe/Bucharest",
+  "dependencies": {
+    "enabledAdvancedServices": [{
+      "userSymbol": "AnalyticsData",
+      "serviceId": "analyticsdata",
+      "version": "v1beta"
+    }]
+  },
+  "webapp": {
+    "access": "ANYONE_ANONYMOUS",
+    "executeAs": "USER_DEPLOYING"
+  },
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8"
+}

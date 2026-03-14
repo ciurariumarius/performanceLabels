@@ -32,7 +32,7 @@ function loadConfigurationsFromSheetObject(configSheet) {
   }
 
   const sheetName = configSheet.getName();
-  const cacheKey = 'CONFIG_CACHE_' + sheetName;
+  const cacheKey = `CONFIG_CACHE_${sheetName}`;
   const cache = CacheService.getScriptCache();
   
   // 1. Try Cache
@@ -43,7 +43,7 @@ function loadConfigurationsFromSheetObject(configSheet) {
   }
 
   // 2. Fetch from Sheet
-  Logger.log('Cache miss for "' + sheetName + '". Fetching from sheet...');
+  Logger.log(`Cache miss for "${sheetName}". Fetching from sheet...`);
   const configurations = {};
   
   try {

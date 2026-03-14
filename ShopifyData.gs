@@ -29,7 +29,7 @@ const SHOPIFY_API_VERSION = '2024-04';
  * - 'parent_id'  => product ID only
  */
 const PRODUCT_ID_FORMAT = 'shopify'; 
-const PRODUCT_COUNTRY_CODE = 'ZZ'; 
+const PRODUCT_COUNTRY_CODE = 'zz'; 
 
 /**
  * TRIGGER 1 (DAILY): Starts the job.
@@ -46,26 +46,15 @@ function startShopifyReport() {
     resetShopifyScript_(); 
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    let config = loadShopifyConfig_(ss);
-
-    // 2026 Auth: Refresh the token before starting if credentials exist
-    if (config.clientId && config.clientSecret) {
-      console.log("Refreshing Shopify Access Token (2026 Flow)...");
-      const newToken = getShopifyAccessToken_(config.clientId, config.clientSecret, config.domain);
-      if (newToken) {
-        config.accessToken = newToken;
-        PropertiesService.getScriptProperties().setProperty('SHOPIFY_SESSION_TOKEN', newToken);
-        console.log("Token refreshed successfully.");
-      }
-    }
+    const config = loadShopifyConfig_(ss);
 
     // Initial URLs
-    const productsUrl = 'https://' + config.domain + '/admin/api/' + SHOPIFY_API_VERSION + '/products.json?limit=' + SHOPIFY_ITEMS_PER_PAGE + '&fields=id,title,variants,created_at';
+    const productsUrl = `https://${config.domain}/admin/api/${SHOPIFY_API_VERSION}/products.json?limit=${SHOPIFY_ITEMS_PER_PAGE}&fields=id,title,variants,created_at`;
     
     // Calculate Order timeframe
     const endDate = new Date();
     const startDate = new Date(endDate.getTime() - config.days * 86400000);
-    const ordersUrl = 'https://' + config.domain + '/admin/api/' + SHOPIFY_API_VERSION + '/orders.json?limit=' + SHOPIFY_ITEMS_PER_PAGE + '&status=any&created_at_min=' + startDate.toISOString() + '&fields=id,line_items,created_at,financial_status,cancelled_at';
+    const ordersUrl = `https://${config.domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json?limit=${SHOPIFY_ITEMS_PER_PAGE}&status=any&created_at_min=${startDate.toISOString()}&fields=id,line_items,created_at,financial_status,cancelled_at`;
 
     const startState = {
       phase: 'FETCH_PRODUCTS',
@@ -141,6 +130,12 @@ function processShopifyBatchCore_() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const config = loadShopifyConfig_(ss);
+    const accessToken = getShopifyAccessToken_(config);
+    if (!accessToken) {
+      logShopifyStatus_("ERROR", "Failed to obtain Shopify access token.");
+      scriptProperties.setProperty('SHOPIFY_WORKER_STATUS', 'IDLE');
+      return;
+    }
     let productMap = loadShopifyDataFromDrive_(); 
 
     // --- PHASE 1: FETCH PRODUCTS ---
@@ -150,7 +145,7 @@ function processShopifyBatchCore_() {
       while (state.nextProductUrl) {
         if (isShopifyTimeUp_(executionStart)) break;
 
-        const response = fetchShopifyUrl_(state.nextProductUrl, config.accessToken);
+        const response = fetchShopifyUrl_(state.nextProductUrl, accessToken);
         if (response) {
           const data = JSON.parse(response.content);
           
@@ -164,7 +159,7 @@ function processShopifyBatchCore_() {
                   formattedProductId = String(product.id);
                 } else {
                   // 'shopify' format: shopify_COUNTRY_productId_variantId
-                  formattedProductId = 'shopify_' + config.countryCode + '_' + product.id + '_' + variant.id;
+                  formattedProductId = `shopify_${config.countryCode}_${product.id}_${variant.id}`;
                 }
                 const formattedDate = product.created_at ? formatDisplayDateTime(new Date(product.created_at)) : null;
 
@@ -220,7 +215,7 @@ function processShopifyBatchCore_() {
       while (state.nextOrderUrl) {
         if (isShopifyTimeUp_(executionStart)) break;
 
-        const response = fetchShopifyUrl_(state.nextOrderUrl, config.accessToken);
+        const response = fetchShopifyUrl_(state.nextOrderUrl, accessToken);
         if (response) {
           const data = JSON.parse(response.content);
           
@@ -294,7 +289,7 @@ function processShopifyBatchCore_() {
 
           for (let i = state.writeStartIndex; i < rows.length; i += CHUNK_SIZE) {
             if (isShopifyTimeUp_(executionStart)) {
-              logShopifyStatus_("PAUSED", 'Writing paused at row ' + i + '...');
+              logShopifyStatus_("PAUSED", `Writing paused at row ${i}...`);
               state.writeStartIndex = i;
               doneWriting = false;
               break;
@@ -302,7 +297,7 @@ function processShopifyBatchCore_() {
             const chunk = rows.slice(i, i + CHUNK_SIZE);
             sheet.getRange(2 + i, 1, chunk.length, 13).setValues(chunk);
             SpreadsheetApp.flush();
-            logShopifyStatus_("WRITING", 'Writing rows ' + i + ' - ' + (i + chunk.length) + '...');
+            logShopifyStatus_("WRITING", `Writing rows ${i} - ${i+chunk.length}...`);
           }
 
           if (doneWriting) {
@@ -333,7 +328,7 @@ function processShopifyBatchCore_() {
         : "0%";
 
       upsertAccountDataRow(ss, SHOPIFY_ACCOUNT_SHEET_NAME, {
-        source: 'Shopify - ' + config.domain,
+        source: `Shopify - ${config.domain}`,
         timeframe: formatDisplayDateRange(config.days),
         revenue: state.totalRevenue,
         orders: state.uniqueOrdersCount,
@@ -368,8 +363,39 @@ function processShopifyBatchCore_() {
 
 // --- HELPER FUNCTIONS ---
 
-function fetchShopifyUrl_(url, accessToken, retries) {
-  if (retries === undefined) retries = 3;
+/**
+ * Obtains a fresh access token via Shopify OAuth client_credentials (valid 24h).
+ * POST to .../admin/oauth/access_token?grant_type=client_credentials&client_id=...&client_secret=...
+ * @param {{ domain: string, clientId: string, clientSecret: string }} config
+ * @return {?string} access_token or null on failure
+ */
+function getShopifyAccessToken_(config) {
+  const url = `https://${config.domain}/admin/oauth/access_token?grant_type=client_credentials&client_id=${encodeURIComponent(config.clientId)}&client_secret=${encodeURIComponent(config.clientSecret)}`;
+  const maxRetries = 2;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = UrlFetchApp.fetch(url, {
+        method: 'post',
+        muteHttpExceptions: true,
+        contentType: 'application/json'
+      });
+      const code = response.getResponseCode();
+      const body = response.getContentText();
+      if (code >= 200 && code < 300) {
+        const data = JSON.parse(body);
+        if (data && data.access_token) return data.access_token;
+      }
+      console.warn(`Shopify OAuth ${code} (attempt ${attempt + 1}): ${body}`);
+      if (attempt < maxRetries) Utilities.sleep(1000 * (attempt + 1));
+    } catch (e) {
+      console.warn(`Shopify OAuth exception (attempt ${attempt + 1}): ${e.message}`);
+      if (attempt < maxRetries) Utilities.sleep(1000 * (attempt + 1));
+    }
+  }
+  return null;
+}
+
+function fetchShopifyUrl_(url, accessToken, retries = 3) {
   for (let i = 0; i < retries; i++) {
     try {
       const options = {
@@ -381,7 +407,7 @@ function fetchShopifyUrl_(url, accessToken, retries) {
       const code = response.getResponseCode();
       
       if (code === 429) {
-         console.warn('Rate limit (429). Retry ' + (i + 1) + '/' + retries + '...');
+         console.warn(`Rate limit (429). Retry ${i+1}/${retries}...`);
          Utilities.sleep(1000 * Math.pow(2, i)); 
          continue; 
       }
@@ -390,11 +416,11 @@ function fetchShopifyUrl_(url, accessToken, retries) {
         return { content: response.getContentText(), headers: response.getHeaders() };
       }
       
-      console.warn('Shopify API Error ' + code + ' (Attempt ' + (i + 1) + '): ' + response.getContentText());
+      console.warn(`Shopify API Error ${code} (Attempt ${i+1}): ${response.getContentText()}`);
       if (i < retries - 1) Utilities.sleep(1000 * (i + 1));
       
     } catch (e) {
-      console.warn('Fetch Exception (Attempt ' + (i + 1) + '): ' + e.message);
+      console.warn(`Fetch Exception (Attempt ${i+1}): ${e.message}`);
       if (i < retries - 1) Utilities.sleep(1000 * (i + 1));
     }
   }
@@ -422,40 +448,25 @@ function determineShopifyStockStatus_(variant) {
 }
 
 /**
- * Exchanges Client Credentials for an Access Token (OAuth 2026 Flow).
- * Tokens typically expire in 24 hours.
+ * Reads Client ID and Client Secret directly from Config sheet (columns A = label, B = value).
+ * Use when loadConfigurationsFromSheetObject only reads a fixed range and misses new rows.
  */
-function getShopifyAccessToken_(clientId, clientSecret, domain) {
-  const url = 'https://' + domain + '/admin/api/oauth/access_token';
-  const payload = {
-    client_id: clientId,
-    client_secret: clientSecret,
-    grant_type: 'client_credentials'
-  };
-
-  const options = {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  };
-
-  try {
-    const response = UrlFetchApp.fetch(url, options);
-    const code = response.getResponseCode();
-    const content = response.getContentText();
-
-    if (code === 200) {
-      const data = JSON.parse(content);
-      return data.access_token;
-    } else {
-      console.error('Failed to get Access Token: ' + code + ' - ' + content);
-      return null;
+function getShopifyClientCredentialsFromSheet_(sheet) {
+  const data = sheet.getDataRange().getValues();
+  let clientId = '';
+  let clientSecret = '';
+  for (let i = 0; i < data.length; i++) {
+    const label = String(data[i][0] || '').trim();
+    const value = String(data[i][1] || '').trim();
+    const labelLower = label.toLowerCase();
+    if (labelLower.indexOf('client id') !== -1 && labelLower.indexOf('secret') === -1 && value) {
+      clientId = value;
     }
-  } catch (e) {
-    console.error('Exception during token exchange: ' + e.message);
-    return null;
+    if (labelLower.indexOf('client secret') !== -1 && value) {
+      clientSecret = value;
+    }
   }
+  return { clientId: clientId || null, clientSecret: clientSecret || null };
 }
 
 function loadShopifyConfig_(ss) {
@@ -464,27 +475,25 @@ function loadShopifyConfig_(ss) {
   const configs = loadConfigurationsFromSheetObject(sheet);
   
   const domain = getConfigValue(configs, "Shopify Domain", 'string');
-  
-  // Try to get dynamic token first, fallback to static "Shopify accessToken"
-  let token = PropertiesService.getScriptProperties().getProperty('SHOPIFY_SESSION_TOKEN');
-  if (!token) {
-    token = getConfigValue(configs, "Shopify accessToken", 'string');
-  }
-
-  const clientId = getConfigValue(configs, "Shopify Client ID", 'string');
-  const clientSecret = getConfigValue(configs, "Shopify Client Secret", 'string');
+  let clientId = getConfigValue(configs, "Shopify Client ID", 'string') || getConfigValue(configs, "Shopify Client Id", 'string');
+  let clientSecret = getConfigValue(configs, "Shopify Client Secret", 'string') || getConfigValue(configs, "Shopify client secret", 'string');
   const days = getConfigValue(configs, "Timeframe", 'int', 30);
+
+  if (!clientId || !clientSecret) {
+    const fromSheet = getShopifyClientCredentialsFromSheet_(sheet);
+    if (fromSheet.clientId) clientId = clientId || fromSheet.clientId;
+    if (fromSheet.clientSecret) clientSecret = clientSecret || fromSheet.clientSecret;
+  }
   
-  if (!domain || (!token && !clientSecret)) {
-    console.error('Config Error: Domain="' + domain + '", TokenFound=' + (!!token) + ', ClientIdFound=' + (!!clientId));
-    throw new Error("Shopify Domain or Credentials missing.");
+  if (!domain || !clientId || !clientSecret) {
+    console.error(`Config Error: Domain="${domain}", ClientId=${clientId ? "set" : "missing"}, ClientSecret=${clientSecret ? "set" : "missing"}`);
+    throw new Error("Shopify Domain, Client ID and Client Secret are required.");
   }
   
   return { 
     domain, 
-    accessToken: token, 
-    clientId: clientId,
-    clientSecret: clientSecret,
+    clientId, 
+    clientSecret, 
     days, 
     countryCode: PRODUCT_COUNTRY_CODE,
     idFormat: PRODUCT_ID_FORMAT
