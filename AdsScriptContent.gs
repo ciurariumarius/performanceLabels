@@ -247,5 +247,5 @@ function last_n_days(n) {
   const formattedStartDate = Utilities.formatDate(startDate, AdsApp.currentAccount().getTimeZone(), "yyyyMMdd");
   return \`\${formattedStartDate},\${endDate}\`;
 }
-\`;
+`;
 }

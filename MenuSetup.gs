@@ -154,6 +154,9 @@ function showDocumentation() {
   const html = HtmlService.createHtmlOutputFromFile('README')
       .setWidth(480)
       .setHeight(520);
+  SpreadsheetApp.getUi().showModalDialog(html, '📖 Performance Labels — Documentation');
+}
+
 // ---------------------------------------------------------------------------
 // Google Ads Script Copy Modal
 // ---------------------------------------------------------------------------
