@@ -219,6 +219,7 @@ function writeResultsToSheets_GA4_(spreadsheet, mainReportResults, accountSummar
     GA4_ACCOUNT_DATA_SHEET_NAME, 
     `GA4 - ${propertyId}`, 
     "SUCCESS", 
-    `Pulled analytics data for ${displayTimeframe}`
+    `Pulled analytics data for ${displayTimeframe}`,
+    timeframe
   );
 }

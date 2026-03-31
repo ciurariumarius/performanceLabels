@@ -326,14 +326,15 @@ function initializeOverviewDashboard_(sheet) {
 
   // 3. Bottom Section (Historical Log)
   sheet.getRange("A11").setValue("EXECUTION LOG").setFontWeight("bold").setFontSize(12);
-  const logHeaders = ["Timestamp", "Component", "Action / Status", "Details"];
+  const logHeaders = ["Timestamp", "Component", "Action / Status", "Details", "Timeframe (Days)"];
   sheet.getRange(12, 1, 1, logHeaders.length).setValues([logHeaders]).setFontWeight("bold").setBackground("#fce8e6").setHorizontalAlignment("center");
   
   // Set Column Widths for better UI
   sheet.setColumnWidth(1, 130);
   sheet.setColumnWidth(2, 160);
   sheet.setColumnWidth(3, 200);
-  sheet.setColumnWidth(4, 300);
+  sheet.setColumnWidth(4, 250);
+  sheet.setColumnWidth(5, 120);
   
   SpreadsheetApp.flush();
 }
@@ -397,7 +398,7 @@ function updateDashboardMetrics(spreadsheet, sheetName, totals) {
  * Appends a new historic row to the Execution Log (Row 13 downwards).
  * Keeps maximum 500 logs by deleting rows > 512.
  */
-function appendToOverviewLog(spreadsheet, sheetName, component, status, details) {
+function appendToOverviewLog(spreadsheet, sheetName, component, status, details, timeframe = "-") {
   const sheet = getOrCreateSheet(spreadsheet, sheetName);
   initializeOverviewDashboard_(sheet);
 
@@ -406,8 +407,8 @@ function appendToOverviewLog(spreadsheet, sheetName, component, status, details)
   // Insert row at top of log (Row 13, pushing old ones down)
   sheet.insertRowBefore(13);
   
-  const rowData = [[timestamp, component, status, details]];
-  const range = sheet.getRange(13, 1, 1, 4);
+  const rowData = [[timestamp, component, status, details, timeframe]];
+  const range = sheet.getRange(13, 1, 1, 5);
   range.setValues(rowData).setFontWeight("normal").setBackground(null);
   
   // Basic Color coding for the 'Status' column (C13)

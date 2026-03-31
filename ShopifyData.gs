@@ -365,7 +365,8 @@ function executeShopifyWriteDataPhase_(config, state, productMap, executionStart
     SHOPIFY_ACCOUNT_SHEET_NAME, 
     `Shopify Sync (${config.days}d)`, 
     "SUCCESS", 
-    `Fetched ${Object.keys(productMap).length} items`
+    `Fetched ${Object.keys(productMap).length} items`,
+    config.days
   );
 
   logShopifyStatus_("COMPLETED", "Finished successfully.");

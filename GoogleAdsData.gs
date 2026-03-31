@@ -93,7 +93,8 @@ function main() {
       "Overview",
       `Google Ads - ${accountName}`,
       "SUCCESS",
-      `Synced ${productData.length} active products`
+      `Synced ${productData.length} active products`,
+      GADS_TIMEFRAME_DAYS
     );
 
     updateDashboardStatus(ss, "Overview", "COMPLETED", "Google Ads sync finished.");
@@ -134,13 +135,14 @@ function initializeOverviewDashboard_(sheet) {
   sheet.getRange("G7").setValue("Products without stock with sales (%):").setFontWeight("bold");
 
   sheet.getRange("A11").setValue("EXECUTION LOG").setFontWeight("bold").setFontSize(12);
-  const logHeaders = ["Timestamp", "Component", "Action / Status", "Details"];
+  const logHeaders = ["Timestamp", "Component", "Action / Status", "Details", "Timeframe (Days)"];
   sheet.getRange(12, 1, 1, logHeaders.length).setValues([logHeaders]).setFontWeight("bold").setBackground("#fce8e6").setHorizontalAlignment("center");
   
   sheet.setColumnWidth(1, 130);
   sheet.setColumnWidth(2, 160);
   sheet.setColumnWidth(3, 200);
-  sheet.setColumnWidth(4, 300);
+  sheet.setColumnWidth(4, 250);
+  sheet.setColumnWidth(5, 120);
 }
 
 function updateDashboardStatus(spreadsheet, sheetName, status, message) {
@@ -182,17 +184,17 @@ function updateDashboardMetrics(spreadsheet, sheetName, totals) {
   }
 }
 
-function appendToOverviewLog(spreadsheet, sheetName, component, status, details) {
+function appendToOverviewLog(spreadsheet, sheetName, component, status, details, timeframe = "-") {
   const sheet = ensureSheetExists(spreadsheet, sheetName);
   initializeOverviewDashboard_(sheet);
 
   const now = new Date();
-  const timestamp = Utilities.formatDate(now, AdsApp.currentAccount().getTimeZone(), "dd.MM.yyyy HH:mm");
+  const timestamp = Utilities.formatDate(now, AdsApp.currentAccount().getTimeZone(), "dd/MM/yyyy HH:mm:ss");
   
   sheet.insertRowBefore(13);
   
-  const rowData = [[timestamp, component, status, details]];
-  const range = sheet.getRange(13, 1, 1, 4);
+  const rowData = [[timestamp, component, status, details, timeframe]];
+  const range = sheet.getRange(13, 1, 1, 5);
   range.setValues(rowData).setFontWeight("normal").setBackground(null);
   
   if (status.includes("ERROR") || status.includes("FAIL")) range.setBackground("#fce8e6");
