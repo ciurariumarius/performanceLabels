@@ -40,6 +40,7 @@ function onOpen() {
     devMenu.addItem('🛒 Get WooCommerce Data', 'startWooCommerceReport');
   }
   
+  devMenu.addItem('📈 Get Google Analytics Data', 'runGA4Report');
   devMenu.addItem('🏷️ Recalculate Labels', 'runAllLabelCalculations');
 
   const settingsMenu = ui.createMenu('⚙️ Settings')
@@ -118,6 +119,7 @@ function getCurrentSettingsForDialog() {
     shopifyDomain: props.getProperty('SHOPIFY_DOMAIN')      || '',
     shopifyId:     mask('SHOPIFY_CLIENT_ID'),
     shopifySecret: mask('SHOPIFY_CLIENT_SECRET'),
+    ga4PropertyId: props.getProperty('GA4_PROPERTY_ID')     || ''
   };
 }
 
@@ -139,6 +141,16 @@ function saveSettingsFromDialog(payload) {
   if (payload.shopifyDomain)  props.setProperty('SHOPIFY_DOMAIN',        payload.shopifyDomain);
   if (payload.shopifyId)      props.setProperty('SHOPIFY_CLIENT_ID',     payload.shopifyId);
   if (payload.shopifySecret)  props.setProperty('SHOPIFY_CLIENT_SECRET', payload.shopifySecret);
+
+  // Google Analytics
+  if (payload.ga4PropertyId) {
+    props.setProperty('GA4_PROPERTY_ID', payload.ga4PropertyId);
+  } else {
+    // Note: If they intentionally blank it out, we should probably delete it.
+    // However, keeping consistent with the rest of the script that only sets to non-empty.
+    // If we want them to clear it, we could use setProperty('GA4_PROPERTY_ID', '') instead.
+    props.setProperty('GA4_PROPERTY_ID', payload.ga4PropertyId || '');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -151,16 +163,18 @@ function viewStoreSettings() {
   const platform = getActivePlatform();
   let message;
 
+  const gaId  = props.getProperty('GA4_PROPERTY_ID') || 'Not configured';
+
   if (platform === 'shopify') {
     const domain = props.getProperty('SHOPIFY_DOMAIN') || 'Not configured';
     const id     = props.getProperty('SHOPIFY_CLIENT_ID')     ? '••••' + props.getProperty('SHOPIFY_CLIENT_ID').slice(-4)     : 'Not configured';
     const secret = props.getProperty('SHOPIFY_CLIENT_SECRET') ? '••••' + props.getProperty('SHOPIFY_CLIENT_SECRET').slice(-4) : 'Not configured';
-    message = `🛍️ SHOPIFY\nDomain:     ${domain}\nAPI Key/ID: ${id}\nSecret:     ${secret}`;
+    message = `🛍️ SHOPIFY\nDomain:     ${domain}\nAPI Key/ID: ${id}\nSecret:     ${secret}\n\n📈 GOOGLE ANALYTICS\nProperty ID: ${gaId}`;
   } else {
     const domain = props.getProperty('WOOCOMMERCE_DOMAIN') || 'Not configured';
     const key    = props.getProperty('WOOCOMMERCE_API_KEY')    ? '••••' + props.getProperty('WOOCOMMERCE_API_KEY').slice(-4)    : 'Not configured';
     const secret = props.getProperty('WOOCOMMERCE_API_SECRET') ? '••••' + props.getProperty('WOOCOMMERCE_API_SECRET').slice(-4) : 'Not configured';
-    message = `🛒 WOOCOMMERCE\nDomain:     ${domain}\nAPI Key:    ${key}\nSecret:     ${secret}`;
+    message = `🛒 WOOCOMMERCE\nDomain:     ${domain}\nAPI Key:    ${key}\nSecret:     ${secret}\n\n📈 GOOGLE ANALYTICS\nProperty ID: ${gaId}`;
   }
 
   ui.alert(`Current Settings — Platform: ${platform}`, message, ui.ButtonSet.OK);

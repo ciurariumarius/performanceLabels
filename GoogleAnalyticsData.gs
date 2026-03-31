@@ -13,7 +13,6 @@
  */
 
 // --- Script-level Constants (with unique names) ---
-const GA4_CONFIG_SHEET_NAME = 'Config';
 const GA4_ANALYTICS_SHEET_NAME = 'Analytics';
 const GA4_ACCOUNT_DATA_SHEET_NAME = 'Overview';
 
@@ -28,21 +27,20 @@ function runGA4Report() {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
 
     // --- 1. Load and Validate Configuration ---
-    const configSheet = spreadsheet.getSheetByName(GA4_CONFIG_SHEET_NAME);
-    if (!configSheet) {
-      throw new Error(`Configuration sheet "${GA4_CONFIG_SHEET_NAME}" does not exist.`);
-    }
-
     // Assumes CommonUtilities.gs is available
-    const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(configSheet);
-    const propertyId = getConfigValue(SCRIPT_CONFIGS, "GA4 propertyId", 'string');
+    const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(null);
+    
+    // Prioritize secure Settings, fallback to Config sheet
+    const props = PropertiesService.getScriptProperties();
+    const propertyId = props.getProperty('GA4_PROPERTY_ID') || getConfigValue(SCRIPT_CONFIGS, "GA4 propertyId", 'string');
+    
     const timeframe = getConfigValue(SCRIPT_CONFIGS, "Timeframe", 'int', 90); // Use general timeframe
 
     if (!propertyId) {
-      throw new Error(`Configuration "GA4 propertyId" is missing or invalid in '${GA4_CONFIG_SHEET_NAME}'.`);
+      throw new Error(`Google Analytics 4 Property ID is not configured. Please add it via the "Dev > Settings" menu.`);
     }
     if (timeframe <= 0) {
-      throw new Error(`Configuration "Timeframe" must be a positive number in '${GA4_CONFIG_SHEET_NAME}'.`);
+      throw new Error(`Configuration "Timeframe" must be a positive number in the Config sheet.`);
     }
 
     // --- 2. Calculate Date Ranges ---

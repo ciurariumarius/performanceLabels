@@ -19,15 +19,54 @@ function runAllLabelCalculations() {
   Logger.log("--- Starting Data Consolidation ---");
   consolidateMetrics(ss);
   
-  Logger.log("--- Starting Label Calculations ---");
-  try { runRevenueLabels(); } catch(e) { Logger.log("Error in Revenue: " + e.message); }
-  try { runPriceLabels(); } catch(e) { Logger.log("Error in Price: " + e.message); }
-  try { runOrdersLabel(); } catch(e) { Logger.log("Error in Orders: " + e.message); }
-  try { runAvailableVariantsLabel(); } catch(e) { Logger.log("Error in Variants: " + e.message); }
-  try { runPerformanceIndexLabel(); } catch(e) { Logger.log("Error in Performance: " + e.message); }
-  try { runTrendLabelCalculation(); } catch(e) { Logger.log("Error in Trend: " + e.message); }
-  try { runNewProductLabelCalculation(); } catch(e) { Logger.log("Error in New Product: " + e.message); }
-  try { runGoogleAdsLabelCalculation(); } catch(e) { Logger.log("Error in GAds: " + e.message); }
+  Logger.log("--- Loading Metrics into Memory ---");
+  const metricsSheet = getOrCreateSheet(ss, METRICS_SHEET_NAME);
+  const lastRow = metricsSheet.getLastRow();
+  
+  if (lastRow < 2) {
+    Logger.log("No data found in Metrics sheet. Aborting labels.");
+    try { updateDashboardStatus(ss, "Overview", "COMPLETED", "No data to process."); } catch(e) {}
+    return;
+  }
+  
+  const lastCol = metricsSheet.getLastColumn();
+  const rawHeaders = metricsSheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const rawData = metricsSheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  const globalConfig = loadConfigurationsFromSheetObject(null);
+
+  Logger.log("--- Starting Label Calculations IN-MEMORY ---");
+  
+  const idIndex = rawHeaders.indexOf("id");
+  const allHeaders = ["id"]; 
+  const allLabels = rawData.map(row => [row[idIndex]]); // Initialize with IDs
+
+  // Helper to aggregate results block by block
+  const addResult = (result, name) => {
+    if (!result || !result.headers || !result.labels) {
+      Logger.log(`Skipping output for ${name} due to missing result or error.`);
+      return;
+    }
+    allHeaders.push(...result.headers);
+    for (let i = 0; i < rawData.length; i++) {
+        allLabels[i].push(...(result.labels[i] || []));
+    }
+    Logger.log(`Successfully calculated ${name} labels.`);
+  };
+
+  try { addResult(runRevenueLabels(rawData, rawHeaders, globalConfig), "Revenue"); } catch(e) { Logger.log("Error in Revenue: " + e.message); }
+  try { addResult(runPriceLabels(rawData, rawHeaders, globalConfig), "Price"); } catch(e) { Logger.log("Error in Price: " + e.message); }
+  try { addResult(runOrdersLabel(rawData, rawHeaders, globalConfig), "Orders"); } catch(e) { Logger.log("Error in Orders: " + e.message); }
+  try { addResult(runAvailableVariantsLabel(rawData, rawHeaders, globalConfig), "Variants"); } catch(e) { Logger.log("Error in Variants: " + e.message); }
+  try { addResult(runPerformanceIndexLabel(rawData, rawHeaders, globalConfig), "Performance"); } catch(e) { Logger.log("Error in Performance: " + e.message); }
+  try { addResult(runTrendLabelCalculation(rawData, rawHeaders, globalConfig), "Trend"); } catch(e) { Logger.log("Error in Trend: " + e.message); }
+  try { addResult(runNewProductLabelCalculation(rawData, rawHeaders, globalConfig), "New Product"); } catch(e) { Logger.log("Error in New Product: " + e.message); }
+  try { addResult(runGoogleAdsLabelCalculation(rawData, rawHeaders, globalConfig), "GAds"); } catch(e) { Logger.log("Error in GAds: " + e.message); }
+  
+  Logger.log("--- Writing All Labels to Sheet ---");
+  const labelsSheet = getOrCreateSheet(ss, LABELS_SHEET_NAME);
+  labelsSheet.clear();
+  labelsSheet.getRange(1, 1, 1, allHeaders.length).setValues([allHeaders]).setFontWeight("bold");
+  writeValuesToSheetSafe(labelsSheet, 2, 1, allLabels);
   
   Logger.log("--- Synchronizing Secondary Feed ---");
   try { syncSecondaryFeed_(ss); } catch(e) { Logger.log("Error in Feed Sync: " + e.message); }
@@ -90,14 +129,8 @@ function consolidateMetrics(ss) {
     metricsSheet.getRange(2, 12, combinedData.length, 1).setNumberFormat("#,##0.00"); 
     metricsSheet.getRange(2, 14, combinedData.length, 1).setNumberFormat("#,##0.00"); 
     
-    // --- Initialize GMC_Feed (primary: raw IDs) ---
-    const labelsSheet = getOrCreateSheet(ss, LABELS_SHEET_NAME);
-    labelsSheet.clear(); 
-    labelsSheet.getRange(1, 1, 1, 1).setValues([["id"]]).setFontWeight("bold");
-    const idColumnData = combinedData.map(row => [row[0]]);
-    writeValuesToSheetSafe(labelsSheet, 2, 1, idColumnData);
-
     // --- Initialize GMC_Feed_2 (secondary: ID-modified, only created if prefix/suffix is configured) ---
+    // Note: Initialization of the primary feed is skipped here since we do it as one batch write later.
     const prefix = AppConfig.IdPrefix || "";
     const suffix = AppConfig.IdSuffix || "";
     if (prefix || suffix) {
@@ -115,7 +148,7 @@ function consolidateMetrics(ss) {
 
 /**
  * Copies all label columns from GMC_Feed to GMC_Feed_2.
- * Both sheets are initialized with the same row order in consolidateMetrics.
+ * Both sheets are initialized with the same row order.
  */
 function syncSecondaryFeed_(ss) {
   const feed1 = ss.getSheetByName(LABELS_SHEET_NAME);
