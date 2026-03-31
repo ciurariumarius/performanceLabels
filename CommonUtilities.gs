@@ -321,12 +321,12 @@ function initializeOverviewDashboard_(sheet) {
   sheet.getRange("D7").setValue("Ads Cost:").setFontWeight("bold");
   sheet.getRange("D8").setValue("Ads Conversions:").setFontWeight("bold");
 
-  sheet.getRange("G6").setValue("OOS w/ Sales (#):").setFontWeight("bold");
-  sheet.getRange("G7").setValue("OOS w/ Sales (%):").setFontWeight("bold");
+  sheet.getRange("G6").setValue("Products without stock with sales (#):").setFontWeight("bold");
+  sheet.getRange("G7").setValue("Products without stock with sales (%):").setFontWeight("bold");
 
   // 3. Bottom Section (Historical Log)
   sheet.getRange("A11").setValue("EXECUTION LOG").setFontWeight("bold").setFontSize(12);
-  const logHeaders = ["Timestamp", "Component", "Action / Status", "Details", "Store Rev", "Ads Cost", "OOS %"];
+  const logHeaders = ["Timestamp", "Component", "Action / Status", "Details"];
   sheet.getRange(12, 1, 1, logHeaders.length).setValues([logHeaders]).setFontWeight("bold").setBackground("#fce8e6").setHorizontalAlignment("center");
   
   // Set Column Widths for better UI
@@ -397,7 +397,7 @@ function updateDashboardMetrics(spreadsheet, sheetName, totals) {
  * Appends a new historic row to the Execution Log (Row 13 downwards).
  * Keeps maximum 500 logs by deleting rows > 512.
  */
-function appendToOverviewLog(spreadsheet, sheetName, component, status, details, rev = "-", cost = "-", oos = "-") {
+function appendToOverviewLog(spreadsheet, sheetName, component, status, details) {
   const sheet = getOrCreateSheet(spreadsheet, sheetName);
   initializeOverviewDashboard_(sheet);
 
@@ -406,8 +406,8 @@ function appendToOverviewLog(spreadsheet, sheetName, component, status, details,
   // Insert row at top of log (Row 13, pushing old ones down)
   sheet.insertRowBefore(13);
   
-  const rowData = [[timestamp, component, status, details, rev, cost, oos]];
-  const range = sheet.getRange(13, 1, 1, 7);
+  const rowData = [[timestamp, component, status, details]];
+  const range = sheet.getRange(13, 1, 1, 4);
   range.setValues(rowData).setFontWeight("normal").setBackground(null);
   
   // Basic Color coding for the 'Status' column (C13)

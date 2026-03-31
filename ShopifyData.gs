@@ -365,10 +365,7 @@ function executeShopifyWriteDataPhase_(config, state, productMap, executionStart
     SHOPIFY_ACCOUNT_SHEET_NAME, 
     `Shopify Sync (${config.days}d)`, 
     "SUCCESS", 
-    `Fetched ${Object.keys(productMap).length} items`, 
-    state.totalRevenue, 
-    "-", 
-    oosPercent
+    `Fetched ${Object.keys(productMap).length} items`
   );
 
   logShopifyStatus_("COMPLETED", "Finished successfully.");

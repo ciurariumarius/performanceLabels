@@ -353,10 +353,7 @@ function executeWriteDataPhase_(config, state, productMap, executionStart, ss) {
     WOO_ACCOUNT_SHEET_NAME, 
     `WooCommerce Sync (${config.days}d)`, 
     "SUCCESS", 
-    `Fetched ${allProducts.length} items`, 
-    state.totalRevenue, 
-    "-", 
-    oosPercent
+    `Fetched ${allProducts.length} items`
   );
 
   logStatus_("COMPLETED", `Finished at ${new Date().toLocaleTimeString()}`);

@@ -35,7 +35,7 @@ function runAllLabelCalculations() {
   Logger.log("--- All Tasks Completed ---");
   try { 
     updateDashboardStatus(ss, "Overview", "COMPLETED", "All labels calculated."); 
-    appendToOverviewLog(ss, "Overview", "Label Calculations", "SUCCESS", "All labels calculated successfully.", "-", "-", "-");
+    appendToOverviewLog(ss, "Overview", "Label Calculations", "SUCCESS", "All labels calculated successfully.");
   } catch(e) {}
 }
 

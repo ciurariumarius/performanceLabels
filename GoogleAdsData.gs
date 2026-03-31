@@ -23,6 +23,9 @@ const GADS_SHEET_NAME = "GAds";
  */
 function main() {
   try {
+    const ss = SpreadsheetApp.openByUrl(SPREADSHEET_URL);
+    updateDashboardStatus(ss, "Overview", "RUNNING", "Syncing Google Ads data...");
+
     // 1. Build date range (set GADS_TIMEFRAME_DAYS above to match Config.gs)
     const dateRange = last_n_days(GADS_TIMEFRAME_DAYS);
     const dateRangeParts = dateRange.split(',');
@@ -77,8 +80,7 @@ function main() {
     // --- 5. Log to Overview ---
     const accountName = AdsApp.currentAccount().getName();
 
-    const ss = SpreadsheetApp.openByUrl(SPREADSHEET_URL);
-    
+
     updateDashboardMetrics(ss, "Overview", {
       kind: 'ads',
       rev: totals.convValue.toFixed(2),
@@ -91,16 +93,18 @@ function main() {
       "Overview",
       `Google Ads - ${accountName}`,
       "SUCCESS",
-      `Synced ${productData.length} active products`,
-      "-",
-      totals.cost.toFixed(2),
-      "-"
+      `Synced ${productData.length} active products`
     );
 
+    updateDashboardStatus(ss, "Overview", "COMPLETED", "Google Ads sync finished.");
     Logger.log("Data sync and logging completed successfully.");
 
   } catch (e) {
     Logger.log(`Error in GoogleAdsData.gs: ${e.message}`);
+    try {
+      const ssErr = SpreadsheetApp.openByUrl(SPREADSHEET_URL);
+      updateDashboardStatus(ssErr, "Overview", "ERROR", e.message);
+    } catch(e2) {}
   }
 }
 
@@ -126,17 +130,39 @@ function initializeOverviewDashboard_(sheet) {
   sheet.getRange("D7").setValue("Ads Cost:").setFontWeight("bold");
   sheet.getRange("D8").setValue("Ads Conversions:").setFontWeight("bold");
 
-  sheet.getRange("G6").setValue("OOS w/ Sales (#):").setFontWeight("bold");
-  sheet.getRange("G7").setValue("OOS w/ Sales (%):").setFontWeight("bold");
+  sheet.getRange("G6").setValue("Products without stock with sales (#):").setFontWeight("bold");
+  sheet.getRange("G7").setValue("Products without stock with sales (%):").setFontWeight("bold");
 
   sheet.getRange("A11").setValue("EXECUTION LOG").setFontWeight("bold").setFontSize(12);
-  const logHeaders = ["Timestamp", "Component", "Action / Status", "Details", "Store Rev", "Ads Cost", "OOS %"];
+  const logHeaders = ["Timestamp", "Component", "Action / Status", "Details"];
   sheet.getRange(12, 1, 1, logHeaders.length).setValues([logHeaders]).setFontWeight("bold").setBackground("#fce8e6").setHorizontalAlignment("center");
   
   sheet.setColumnWidth(1, 130);
   sheet.setColumnWidth(2, 160);
   sheet.setColumnWidth(3, 200);
   sheet.setColumnWidth(4, 300);
+}
+
+function updateDashboardStatus(spreadsheet, sheetName, status, message) {
+  const sheet = ensureSheetExists(spreadsheet, sheetName);
+  initializeOverviewDashboard_(sheet);
+
+  const statusCell = sheet.getRange("B2");
+  const timeCell = sheet.getRange("B3");
+
+  const timestamp = Utilities.formatDate(new Date(), AdsApp.currentAccount().getTimeZone(), "dd.MM.yyyy HH:mm:ss");
+
+  if (status === "RUNNING") {
+    statusCell.setValue("🟠 RUNNING").setFontColor("#f4b400");
+  } else if (status === "COMPLETED") {
+    statusCell.setValue("🟢 IDLE").setFontColor("#0f9d58");
+  } else if (status === "ERROR") {
+    statusCell.setValue("🔴 ERROR").setFontColor("#db4437");
+  } else {
+    statusCell.setValue("⚪ " + status).setFontColor("#5f6368");
+  }
+
+  timeCell.setValue(message + " (" + timestamp + ")");
 }
 
 function updateDashboardMetrics(spreadsheet, sheetName, totals) {
@@ -156,7 +182,7 @@ function updateDashboardMetrics(spreadsheet, sheetName, totals) {
   }
 }
 
-function appendToOverviewLog(spreadsheet, sheetName, component, status, details, rev = "-", cost = "-", oos = "-") {
+function appendToOverviewLog(spreadsheet, sheetName, component, status, details) {
   const sheet = ensureSheetExists(spreadsheet, sheetName);
   initializeOverviewDashboard_(sheet);
 
@@ -165,8 +191,8 @@ function appendToOverviewLog(spreadsheet, sheetName, component, status, details,
   
   sheet.insertRowBefore(13);
   
-  const rowData = [[timestamp, component, status, details, rev, cost, oos]];
-  const range = sheet.getRange(13, 1, 1, 7);
+  const rowData = [[timestamp, component, status, details]];
+  const range = sheet.getRange(13, 1, 1, 4);
   range.setValues(rowData).setFontWeight("normal").setBackground(null);
   
   if (status.includes("ERROR") || status.includes("FAIL")) range.setBackground("#fce8e6");
