@@ -31,10 +31,15 @@ function onOpen() {
 
 
 
-  const devMenu = ui.createMenu('🛠️ Dev')
-      .addItem('🛒 Force Run WooCommerce', 'startWooCommerceReport')
-      .addItem('🛍️ Force Run Shopify', 'startShopifyReport')
-      .addItem('🏷️ Calculate Labels Only', 'runAllLabelCalculations');
+  const devMenu = ui.createMenu('🛠️ Dev');
+  
+  if (platform === 'shopify') {
+    devMenu.addItem('🛍️ Force Run Shopify', 'startShopifyReport');
+  } else {
+    devMenu.addItem('🛒 Force Run WooCommerce', 'startWooCommerceReport');
+  }
+  
+  devMenu.addItem('🏷️ Calculate Labels Only', 'runAllLabelCalculations');
 
   const settingsMenu = ui.createMenu('⚙️ Settings')
       .addItem('🔑 Update Settings', 'showSettingsDialog')

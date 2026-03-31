@@ -291,67 +291,137 @@ function formatDisplayDate(date) {
  * @param {object} data An object containing the metrics to write.
  *                     { source: "Shopify", timeframe: "30 Days", revenue: 100, cost: 0, orders: 10, oosCount: 2, oosPercent: "10%" }
  */
-function upsertOverviewRow(spreadsheet, sheetName, data) {
+// --- OVERVIEW DASHBOARD LOGIC ---
+
+/**
+ * Initializes the layout of the Overview Dashboard if it's empty or missing headers.
+ */
+function initializeOverviewDashboard_(sheet) {
+  // Check if Top Section is configured
+  const topLeft = sheet.getRange("A1").getValue();
+  if (topLeft === "LIVE SYSTEM STATUS") return; // Already initialized
+
+  sheet.clear();
+  
+  // 1. Top Section (Status)
+  sheet.getRange("A1:C1").merge().setValue("LIVE SYSTEM STATUS").setFontWeight("bold").setBackground("#f3f3f3");
+  sheet.getRange("A2").setValue("Current Status:").setFontWeight("bold");
+  sheet.getRange("B2").setValue("🟢 IDLE").setFontWeight("bold").setFontColor("#0f9d58");
+  sheet.getRange("A3").setValue("Last Sync:").setFontWeight("bold");
+  sheet.getRange("B3").setValue("-");
+
+  // 2. Middle Section (Totals)
+  sheet.getRange("A5:H5").merge().setValue("ACCOUNT TOTALS (LATEST SNAPSHOT)").setFontWeight("bold").setBackground("#e8eaed").setHorizontalAlignment("center");
+  
+  sheet.getRange("A6").setValue("Store Revenue:").setFontWeight("bold");
+  sheet.getRange("A7").setValue("Store Orders:").setFontWeight("bold");
+  sheet.getRange("A8").setValue("Active Products:").setFontWeight("bold");
+
+  sheet.getRange("D6").setValue("Ads Revenue/Value:").setFontWeight("bold");
+  sheet.getRange("D7").setValue("Ads Cost:").setFontWeight("bold");
+  sheet.getRange("D8").setValue("Ads Conversions:").setFontWeight("bold");
+
+  sheet.getRange("G6").setValue("OOS w/ Sales (#):").setFontWeight("bold");
+  sheet.getRange("G7").setValue("OOS w/ Sales (%):").setFontWeight("bold");
+
+  // 3. Bottom Section (Historical Log)
+  sheet.getRange("A11").setValue("EXECUTION LOG").setFontWeight("bold").setFontSize(12);
+  const logHeaders = ["Timestamp", "Component", "Action / Status", "Details", "Store Rev", "Ads Cost", "OOS %"];
+  sheet.getRange(12, 1, 1, logHeaders.length).setValues([logHeaders]).setFontWeight("bold").setBackground("#fce8e6").setHorizontalAlignment("center");
+  
+  // Set Column Widths for better UI
+  sheet.setColumnWidth(1, 130);
+  sheet.setColumnWidth(2, 160);
+  sheet.setColumnWidth(3, 200);
+  sheet.setColumnWidth(4, 300);
+  
+  SpreadsheetApp.flush();
+}
+
+/**
+ * Updates the Live Status Block at A2:B4
+ */
+function updateDashboardStatus(spreadsheet, sheetName, status, message) {
   const sheet = getOrCreateSheet(spreadsheet, sheetName);
+  initializeOverviewDashboard_(sheet);
+
+  let statusText = "🟢 IDLE";
+  let color = "#0f9d58";
   
-  // Headers
-  const headers = ["Timestamp", "Source", "Timeframe", "Revenue", "Cost", "Orders", "OOS w/ Sales (#)", "OOS w/ Sales (%)"];
-  
-  // Robust Header Check: Ensure headers exist even if rows are present
-  // Get first row to check headers
-  const headerRange = sheet.getRange(1, 1, 1, headers.length);
-  const headerValues = headerRange.getValues()[0];
-  
-  if (headerValues[0] !== headers[0]) {
-     headerRange.setValues([headers]).setFontWeight("bold").setHorizontalAlignment("center");
-  }
-  
-  // Determine the last row with data based on Column B (Source)
-  // This avoids issues where dashboards in other columns (like J, M) force appendRow to start lower.
-  const lastRow = sheet.getLastRow(); // Physical last row of the sheet (including dashboard)
-  let dataLastRow = 1; // Default to header row
-  
-  if (lastRow > 1) {
-    const sourceValues = sheet.getRange(2, 2, lastRow - 1, 1).getValues().flat(); // Col B
-    // Find the last index that is not empty
-    for (let i = sourceValues.length - 1; i >= 0; i--) {
-      if (sourceValues[i] !== "") {
-        dataLastRow = i + 2; // +1 for 0-index, +1 for header
-        break;
-      }
-    }
+  if (status === "RUNNING" || status === "WRITING") {
+    statusText = `🟠 ${status}`;
+    color = "#f4b400";
+  } else if (status === "ERROR") {
+    statusText = `🔴 ${status}`;
+    color = "#d23f31";
+  } else if (status === "PAUSED") {
+    statusText = `🟡 ${status}`;
+    color = "#f4b400";
+  } else if (status === "COMPLETED") {
+    statusText = `🟢 ${status}`;
+    color = "#0f9d58";
   }
 
-  let targetRow = -1;
+  sheet.getRange("B2").setValue(statusText).setFontColor(color);
+  if (message) sheet.getRange("C2").setValue(message); // Put details next to it
   
-  // Search for existing source in Column B to update
-  if (dataLastRow > 1) {
-     const sourceValues = sheet.getRange(2, 2, dataLastRow - 1, 1).getValues().flat();
-     const rowIndex = sourceValues.indexOf(data.source);
-     if (rowIndex !== -1) {
-       targetRow = rowIndex + 2;
-     }
+  if (status === "COMPLETED") {
+    sheet.getRange("B3").setValue(formatDisplayDateTime(new Date()));
+    sheet.getRange("C2").setValue(""); // clear message on complete
   }
+}
+
+/**
+ * Updates the Middle Section (Account Totals)
+ * @param {object} totals { kind: 'store'|'ads', rev, cost, orders, products, oosCount, oosPercent }
+ */
+function updateDashboardMetrics(spreadsheet, sheetName, totals) {
+  const sheet = getOrCreateSheet(spreadsheet, sheetName);
+  initializeOverviewDashboard_(sheet);
+
+  if (totals.kind === 'store') {
+    sheet.getRange("B6").setValue(totals.rev).setNumberFormat('#,##0.00');
+    sheet.getRange("B7").setValue(totals.orders);
+    if (totals.products !== undefined) sheet.getRange("B8").setValue(totals.products);
+    
+    sheet.getRange("H6").setValue(totals.oosCount);
+    sheet.getRange("H7").setValue(totals.oosPercent);
+  } else if (totals.kind === 'ads') {
+    sheet.getRange("E6").setValue(totals.rev).setNumberFormat('#,##0.00');
+    sheet.getRange("E7").setValue(totals.cost).setNumberFormat('#,##0.00');
+    sheet.getRange("E8").setValue(totals.orders);
+  }
+}
+
+/**
+ * Appends a new historic row to the Execution Log (Row 13 downwards).
+ * Keeps maximum 500 logs by deleting rows > 512.
+ */
+function appendToOverviewLog(spreadsheet, sheetName, component, status, details, rev = "-", cost = "-", oos = "-") {
+  const sheet = getOrCreateSheet(spreadsheet, sheetName);
+  initializeOverviewDashboard_(sheet);
+
+  const timestamp = formatDisplayDateTime(new Date());
   
-  // Prepare row data
-  const rowData = [
-    formatDisplayDateTime(new Date()), // Timestamp
-    data.source,
-    data.timeframe,
-    data.revenue,
-    data.cost !== undefined ? data.cost : "-",
-    data.orders,
-    data.oosCount !== undefined ? data.oosCount : "-",
-    data.oosPercent !== undefined ? data.oosPercent : "-"
-  ];
+  // Insert row at top of log (Row 13, pushing old ones down)
+  sheet.insertRowBefore(13);
   
-  if (targetRow !== -1) {
-    // update existing
-    sheet.getRange(targetRow, 1, 1, rowData.length).setValues([rowData]);
-  } else {
-    // append new to the calculated dataLastRow + 1
-    const newRow = dataLastRow + 1;
-    sheet.getRange(newRow, 1, 1, rowData.length).setValues([rowData]);
+  const rowData = [[timestamp, component, status, details, rev, cost, oos]];
+  const range = sheet.getRange(13, 1, 1, 7);
+  range.setValues(rowData).setFontWeight("normal").setBackground(null);
+  
+  // Basic Color coding for the 'Status' column (C13)
+  if (status.includes("ERROR") || status.includes("FAIL")) range.setBackground("#fce8e6");
+  else if (status.includes("SUCCESS") || status.includes("COMPLETED")) range.setBackground("#e6f4ea");
+
+  // Cleanup: Max 500 runs to save memory (headers are up to row 12)
+  if (sheet.getMaxRows() > 520) {
+    // Note: getMaxRows() gets all rows including empty ones at bottom.
+    // It's safer to delete bottom rows if getLastRow() is too big
+    if (sheet.getLastRow() > 512) {
+      const rowsToDelete = sheet.getLastRow() - 512;
+      try { sheet.deleteRows(513, rowsToDelete); } catch(e) {}
+    }
   }
 }
 

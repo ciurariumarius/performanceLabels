@@ -351,15 +351,25 @@ function executeShopifyWriteDataPhase_(config, state, productMap, executionStart
     ? ((oosWithSalesCount / totalWithSalesCount) * 100).toFixed(1) + "%" 
     : "0%";
 
-  upsertOverviewRow(ss, SHOPIFY_ACCOUNT_SHEET_NAME, {
-    source: `Shopify - ${config.domain}`,
-    timeframe: formatDisplayDateRange(config.days),
-    revenue: state.totalRevenue,
+  updateDashboardMetrics(ss, SHOPIFY_ACCOUNT_SHEET_NAME, {
+    kind: 'store',
+    rev: state.totalRevenue,
     orders: state.uniqueOrdersCount,
-    cost: "-",
+    products: Object.keys(productMap).length,
     oosCount: oosWithSalesCount,
     oosPercent: oosPercent
   });
+
+  appendToOverviewLog(
+    ss, 
+    SHOPIFY_ACCOUNT_SHEET_NAME, 
+    `Shopify Sync (${config.days}d)`, 
+    "SUCCESS", 
+    `Fetched ${Object.keys(productMap).length} items`, 
+    state.totalRevenue, 
+    "-", 
+    oosPercent
+  );
 
   logShopifyStatus_("COMPLETED", "Finished successfully.");
   resetShopifyScript_();
@@ -490,22 +500,7 @@ function loadShopifyConfig_(ss) {
 function logShopifyStatus_(status, message) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = getOrCreateSheet(ss, SHOPIFY_ACCOUNT_SHEET_NAME); 
-    const range = sheet.getRange("R2:S6"); // Moved to R:S
-    
-    range.setBorder(true, true, true, true, true, true);
-    range.setValues([
-      ["SHOPIFY STATUS", status],
-      ["MESSAGE", message],
-      ["LAST UPDATE", new Date().toLocaleTimeString()],
-      ["", ""],
-      ["NOTE", "Refreshes every 5 mins"]
-    ]);
-    const statusCell = sheet.getRange("S2");
-    if (status === "ERROR") statusCell.setBackground("#FFCCCC");
-    else if (status === "COMPLETED") statusCell.setBackground("#CCFFCC");
-    else statusCell.setBackground("#CCFFFF");
-    SpreadsheetApp.flush(); 
+    updateDashboardStatus(ss, SHOPIFY_ACCOUNT_SHEET_NAME, status, message);
   } catch(e) {}
 }
 

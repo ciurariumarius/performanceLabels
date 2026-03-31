@@ -14,6 +14,8 @@ const METRICS_HEADERS = [
 function runAllLabelCalculations() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
+  try { updateDashboardStatus(ss, "Overview", "RUNNING", "Consolidating Metrics..."); } catch(e) {}
+  
   Logger.log("--- Starting Data Consolidation ---");
   consolidateMetrics(ss);
   
@@ -28,6 +30,10 @@ function runAllLabelCalculations() {
   try { runGoogleAdsLabelCalculation(); } catch(e) { Logger.log("Error in GAds: " + e.message); }
   
   Logger.log("--- All Tasks Completed ---");
+  try { 
+    updateDashboardStatus(ss, "Overview", "COMPLETED", "All labels calculated."); 
+    appendToOverviewLog(ss, "Overview", "Label Calculations", "SUCCESS", "All labels calculated successfully.", "-", "-", "-");
+  } catch(e) {}
 }
 
 function consolidateMetrics(ss) {

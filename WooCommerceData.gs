@@ -339,15 +339,25 @@ function executeWriteDataPhase_(config, state, productMap, executionStart, ss) {
     ? ((oosWithSalesCount / totalWithSalesCount) * 100).toFixed(1) + "%" 
     : "0%";
 
-  upsertOverviewRow(ss, WOO_ACCOUNT_SHEET_NAME, {
-    source: `WooCommerce - ${config.shopUrl}`,
-    timeframe: formatDisplayDateRange(config.days),
-    revenue: state.totalRevenue,
+  updateDashboardMetrics(ss, WOO_ACCOUNT_SHEET_NAME, {
+    kind: 'store',
+    rev: state.totalRevenue,
     orders: state.uniqueOrdersCount,
-    cost: "-",
+    products: allProducts.length,
     oosCount: oosWithSalesCount,
     oosPercent: oosPercent
   });
+
+  appendToOverviewLog(
+    ss, 
+    WOO_ACCOUNT_SHEET_NAME, 
+    `WooCommerce Sync (${config.days}d)`, 
+    "SUCCESS", 
+    `Fetched ${allProducts.length} items`, 
+    state.totalRevenue, 
+    "-", 
+    oosPercent
+  );
 
   logStatus_("COMPLETED", `Finished at ${new Date().toLocaleTimeString()}`);
   resetScript_(); // Cleanup
@@ -366,30 +376,11 @@ function executeWriteDataPhase_(config, state, productMap, executionStart, ss) {
 
 /**
  * Updates the 'Overview' sheet with the live status of the script.
- * Places the status box to the right of the data table (Columns J:K).
  */
 function logStatus_(status, message) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    // Move status logging to Overview sheet as requested
-    const sheet = getOrCreateSheet(ss, WOO_ACCOUNT_SHEET_NAME); 
-    
-    // Using range O2:P6 to sit to the right of standard columns (and moved right)
-    const range = sheet.getRange("O2:P6"); 
-      range.setBorder(true, true, true, true, true, true);
-      range.setValues([
-        ["WOO WORKER STATUS", status],
-        ["MESSAGE", message],
-        ["LAST UPDATE", new Date().toLocaleTimeString()],
-        ["", ""],
-        ["NOTE", "Refreshes every 5 mins"]
-      ]);
-      const statusCell = sheet.getRange("P2");
-      if (status === "ERROR") statusCell.setBackground("#FFCCCC");
-      else if (status === "COMPLETED") statusCell.setBackground("#CCFFCC");
-      else statusCell.setBackground("#CCFFFF");
-      SpreadsheetApp.flush(); 
-
+    updateDashboardStatus(ss, WOO_ACCOUNT_SHEET_NAME, status, message);
   } catch(e) {
     console.warn("Failed to update status sheet: " + e.message);
   }

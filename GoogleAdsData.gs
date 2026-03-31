@@ -77,15 +77,25 @@ function main() {
     // --- 5. Log to Overview ---
     const accountName = AdsApp.currentAccount().getName();
 
-    upsertOverviewRow(SpreadsheetApp.openByUrl(SPREADSHEET_URL), "Overview", {
-      source: `Google Ads - ${accountName}`,
-      timeframe: `Last ${GADS_TIMEFRAME_DAYS} Days`,
-      revenue: totals.convValue.toFixed(2), // Revenue = Conversion Value
+    const ss = SpreadsheetApp.openByUrl(SPREADSHEET_URL);
+    
+    updateDashboardMetrics(ss, "Overview", {
+      kind: 'ads',
+      rev: totals.convValue.toFixed(2),
       cost: totals.cost.toFixed(2),
-      orders: Math.round(totals.conversions), // Orders = Conversions
-      oosCount: "-", // Not tracked in GAds
-      oosPercent: "-"
+      orders: Math.round(totals.conversions)
     });
+
+    appendToOverviewLog(
+      ss,
+      "Overview",
+      `Google Ads - ${accountName}`,
+      "SUCCESS",
+      `Synced ${productData.length} active products`,
+      "-",
+      totals.cost.toFixed(2),
+      "-"
+    );
 
     Logger.log("Data sync and logging completed successfully.");
 
@@ -94,72 +104,78 @@ function main() {
   }
 }
 
-/**
- * Updates a row in the Overview sheet based on the Source Name (Column B).
- * If the source exists, it overwrites the row. If not, it appends a new row.
- */
-function upsertOverviewRow(spreadsheet, sheetName, data) {
-  const sheet = ensureSheetExists(spreadsheet, sheetName);
-  
-  // Headers
-  const headers = ["Timestamp", "Source", "Timeframe", "Revenue", "Cost", "Orders", "OOS w/ Sales (#)", "OOS w/ Sales (%)"];
-  
-  // Robust Header Check
-  const headerRange = sheet.getRange(1, 1, 1, headers.length);
-  const headerValues = headerRange.getValues()[0];
-  
-  if (headerValues[0] !== headers[0]) {
-    headerRange.setValues([headers]).setFontWeight("bold").setHorizontalAlignment("center");
-  }
-  
-  // Determine the last row with data based on Column B (Source)
-  const lastRow = sheet.getLastRow(); // Physical last row
-  let dataLastRow = 1; // Default to header
-  
-  if (lastRow > 1) {
-    const sourceValues = sheet.getRange(2, 2, lastRow - 1, 1).getValues().flat();
-    for (let i = sourceValues.length - 1; i >= 0; i--) {
-      if (sourceValues[i] !== "") {
-        dataLastRow = i + 2;
-        break;
-      }
-    }
-  }
+function initializeOverviewDashboard_(sheet) {
+  const topLeft = sheet.getRange("A1").getValue();
+  if (topLeft === "LIVE SYSTEM STATUS") return;
 
-  let targetRow = -1;
+  sheet.clear();
   
-  // Search for existing source
-  if (dataLastRow > 1) {
-    const sourceValues = sheet.getRange(2, 2, dataLastRow - 1, 1).getValues().flat();
-    const rowIndex = sourceValues.indexOf(data.source);
-    if (rowIndex !== -1) {
-      targetRow = rowIndex + 2;
-    }
+  sheet.getRange("A1:C1").merge().setValue("LIVE SYSTEM STATUS").setFontWeight("bold").setBackground("#f3f3f3");
+  sheet.getRange("A2").setValue("Current Status:").setFontWeight("bold");
+  sheet.getRange("B2").setValue("🟢 IDLE").setFontWeight("bold").setFontColor("#0f9d58");
+  sheet.getRange("A3").setValue("Last Sync:").setFontWeight("bold");
+  sheet.getRange("B3").setValue("-");
+
+  sheet.getRange("A5:H5").merge().setValue("ACCOUNT TOTALS (LATEST SNAPSHOT)").setFontWeight("bold").setBackground("#e8eaed").setHorizontalAlignment("center");
+  
+  sheet.getRange("A6").setValue("Store Revenue:").setFontWeight("bold");
+  sheet.getRange("A7").setValue("Store Orders:").setFontWeight("bold");
+  sheet.getRange("A8").setValue("Active Products:").setFontWeight("bold");
+
+  sheet.getRange("D6").setValue("Ads Revenue/Value:").setFontWeight("bold");
+  sheet.getRange("D7").setValue("Ads Cost:").setFontWeight("bold");
+  sheet.getRange("D8").setValue("Ads Conversions:").setFontWeight("bold");
+
+  sheet.getRange("G6").setValue("OOS w/ Sales (#):").setFontWeight("bold");
+  sheet.getRange("G7").setValue("OOS w/ Sales (%):").setFontWeight("bold");
+
+  sheet.getRange("A11").setValue("EXECUTION LOG").setFontWeight("bold").setFontSize(12);
+  const logHeaders = ["Timestamp", "Component", "Action / Status", "Details", "Store Rev", "Ads Cost", "OOS %"];
+  sheet.getRange(12, 1, 1, logHeaders.length).setValues([logHeaders]).setFontWeight("bold").setBackground("#fce8e6").setHorizontalAlignment("center");
+  
+  sheet.setColumnWidth(1, 130);
+  sheet.setColumnWidth(2, 160);
+  sheet.setColumnWidth(3, 200);
+  sheet.setColumnWidth(4, 300);
+}
+
+function updateDashboardMetrics(spreadsheet, sheetName, totals) {
+  const sheet = ensureSheetExists(spreadsheet, sheetName);
+  initializeOverviewDashboard_(sheet);
+
+  if (totals.kind === 'store') {
+    sheet.getRange("B6").setValue(totals.rev);
+    sheet.getRange("B7").setValue(totals.orders);
+    if (totals.products !== undefined) sheet.getRange("B8").setValue(totals.products);
+    sheet.getRange("H6").setValue(totals.oosCount);
+    sheet.getRange("H7").setValue(totals.oosPercent);
+  } else if (totals.kind === 'ads') {
+    sheet.getRange("E6").setValue(totals.rev);
+    sheet.getRange("E7").setValue(totals.cost);
+    sheet.getRange("E8").setValue(totals.orders);
   }
-  
-  // formatted date
+}
+
+function appendToOverviewLog(spreadsheet, sheetName, component, status, details, rev = "-", cost = "-", oos = "-") {
+  const sheet = ensureSheetExists(spreadsheet, sheetName);
+  initializeOverviewDashboard_(sheet);
+
   const now = new Date();
   const timestamp = Utilities.formatDate(now, AdsApp.currentAccount().getTimeZone(), "dd.MM.yyyy HH:mm");
-
-  // Prepare row data
-  const rowData = [
-    timestamp,
-    data.source,
-    data.timeframe,
-    data.revenue,
-    data.cost !== undefined ? data.cost : "-",
-    data.orders,
-    data.oosCount !== undefined ? data.oosCount : "-",
-    data.oosPercent !== undefined ? data.oosPercent : "-"
-  ];
   
-  if (targetRow !== -1) {
-    // update existing
-    sheet.getRange(targetRow, 1, 1, rowData.length).setValues([rowData]);
-  } else {
-    // append new
-    const newRow = dataLastRow + 1;
-    sheet.getRange(newRow, 1, 1, rowData.length).setValues([rowData]);
+  sheet.insertRowBefore(13);
+  
+  const rowData = [[timestamp, component, status, details, rev, cost, oos]];
+  const range = sheet.getRange(13, 1, 1, 7);
+  range.setValues(rowData).setFontWeight("normal").setBackground(null);
+  
+  if (status.includes("ERROR") || status.includes("FAIL")) range.setBackground("#fce8e6");
+  else if (status.includes("SUCCESS") || status.includes("COMPLETED")) range.setBackground("#e6f4ea");
+
+  if (sheet.getMaxRows() > 520) {
+    if (sheet.getLastRow() > 512) {
+      try { sheet.deleteRows(513, sheet.getLastRow() - 512); } catch(e) {}
+    }
   }
 }
 

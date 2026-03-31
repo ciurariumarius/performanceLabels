@@ -207,14 +207,21 @@ function writeResultsToSheets_GA4_(spreadsheet, mainReportResults, accountSummar
     analyticsSheet.getRange(2, 7, mainReportResults.analyticsSheetRows.length, 2).setNumberFormat("#,##0.00"); // Revenues
   }
 
-  // --- Write to Overview Sheet ---
-  upsertOverviewRow(spreadsheet, GA4_ACCOUNT_DATA_SHEET_NAME, {
-    source: `GA4 - ${propertyId}`,
-    timeframe: displayTimeframe,
-    revenue: mainReportResults.totals.totalRevenue,
-    orders: accountSummaryData.totalTransactions,
-    cost: "-", // Cost data not pulled for GA4 in this setup
-    oosCount: "-", // Stock status not available in standard GA4 reports
-    oosPercent: "-"
+  updateDashboardMetrics(spreadsheet, GA4_ACCOUNT_DATA_SHEET_NAME, {
+    kind: 'ads',
+    rev: mainReportResults.totals.totalRevenue,
+    cost: "-",
+    orders: accountSummaryData.totalTransactions
   });
+
+  appendToOverviewLog(
+    spreadsheet, 
+    GA4_ACCOUNT_DATA_SHEET_NAME, 
+    `GA4 - ${propertyId}`, 
+    "SUCCESS", 
+    `Pulled analytics data for ${displayTimeframe}`, 
+    mainReportResults.totals.totalRevenue, 
+    "-", 
+    "-"
+  );
 }
