@@ -102,10 +102,22 @@
     google.script.run
       .withSuccessHandler(function(data) {
         setPlatform(data.platform || 'woocommerce');
-        document.getElementById('woo-domain').value     = data.wooDomain || '';
+        document.getElementById('woo-domain').value     = data.wooDomain     || '';
+        document.getElementById('woo-key').value        = data.wooKey        || '';
+        document.getElementById('woo-secret').value     = data.wooSecret     || '';
         document.getElementById('shopify-domain').value = data.shopifyDomain || '';
+        document.getElementById('shopify-id').value     = data.shopifyId     || '';
+        document.getElementById('shopify-secret').value = data.shopifySecret || '';
       })
       .getCurrentSettingsForDialog();
+
+    // Clear masked value on focus so user can type a new one
+    ['woo-key','woo-secret','shopify-id','shopify-secret'].forEach(function(id) {
+      var el = document.getElementById(id);
+      el.addEventListener('focus', function() {
+        if (this.value.startsWith('\u2022')) this.value = '';
+      });
+    });
 
     function setPlatform(p) {
       currentPlatform = p;
@@ -116,14 +128,20 @@
     }
 
     function saveSettings() {
+      // Skip masked values that the user didn't change
+      function changed(id) {
+        var v = document.getElementById(id).value.trim();
+        return v && !v.startsWith('\u2022') ? v : '';
+      }
+
       var payload = {
         platform:      currentPlatform,
         wooDomain:     document.getElementById('woo-domain').value.trim(),
-        wooKey:        document.getElementById('woo-key').value.trim(),
-        wooSecret:     document.getElementById('woo-secret').value.trim(),
+        wooKey:        changed('woo-key'),
+        wooSecret:     changed('woo-secret'),
         shopifyDomain: document.getElementById('shopify-domain').value.trim(),
-        shopifyId:     document.getElementById('shopify-id').value.trim(),
-        shopifySecret: document.getElementById('shopify-secret').value.trim(),
+        shopifyId:     changed('shopify-id'),
+        shopifySecret: changed('shopify-secret'),
       };
 
       document.getElementById('status').style.display = 'none';
