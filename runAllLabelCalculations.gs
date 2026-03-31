@@ -29,6 +29,9 @@ function runAllLabelCalculations() {
   try { runNewProductLabelCalculation(); } catch(e) { Logger.log("Error in New Product: " + e.message); }
   try { runGoogleAdsLabelCalculation(); } catch(e) { Logger.log("Error in GAds: " + e.message); }
   
+  Logger.log("--- Synchronizing Secondary Feed ---");
+  try { syncSecondaryFeed_(ss); } catch(e) { Logger.log("Error in Feed Sync: " + e.message); }
+  
   Logger.log("--- All Tasks Completed ---");
   try { 
     updateDashboardStatus(ss, "Overview", "COMPLETED", "All labels calculated."); 
@@ -108,6 +111,32 @@ function consolidateMetrics(ss) {
       Logger.log("GMC_Feed_2 skipped: ID_PREFIX and ID_SUFFIX are both empty in Config.gs.");
     }
   }
+}
+
+/**
+ * Copies all label columns from GMC_Feed to GMC_Feed_2.
+ * Both sheets are initialized with the same row order in consolidateMetrics.
+ */
+function syncSecondaryFeed_(ss) {
+  const feed1 = ss.getSheetByName(LABELS_SHEET_NAME);
+  const feed2 = ss.getSheetByName(LABELS_SHEET_2_NAME);
+  
+  if (!feed1 || !feed2) return;
+  
+  const lastCol = feed1.getLastColumn();
+  const lastRow = feed1.getLastRow();
+  
+  if (lastCol <= 1 || lastRow <= 1) return;
+  
+  // Get all data columns (starting from col 2)
+  const range1 = feed1.getRange(1, 2, lastRow, lastCol - 1);
+  const values = range1.getValues();
+  
+  // Paste into feed 2 starting at col 2
+  const range2 = feed2.getRange(1, 2, lastRow, lastCol - 1);
+  range2.setValues(values);
+  
+  Logger.log(`Synced ${lastCol - 1} label columns to GMC_Feed_2.`);
 }
 
 function getShopifyData_(sheet) {

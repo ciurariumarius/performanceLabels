@@ -26,7 +26,7 @@ function onOpen() {
   const platform = getActivePlatform();
 
   const menu = ui.createMenu('⚡ Performance Labels')
-      .addItem('▶️ Run Now', 'runAllLabelCalculations')
+      .addItem('▶️ Run Now', 'runMainSync')
       .addItem('📋 Google Ads Script - To Copy', 'showAdsScriptModal')
       .addSeparator();
 
@@ -60,6 +60,26 @@ function onOpen() {
       .addSeparator()
       .addItem('📖 Documentation', 'showDocumentation')
       .addToUi();
+}
+
+// ---------------------------------------------------------------------------
+// Orchestration
+// ---------------------------------------------------------------------------
+
+/**
+ * The primary entry point for a full system sync.
+ * Fetches platform data (which then triggers label calculations automatically).
+ */
+function runMainSync() {
+  const platform = getActivePlatform();
+  
+  // 1. Start the primary platform fetcher
+  // Both fetchers are designed to trigger runAllLabelCalculations() when finished.
+  if (platform === 'shopify') {
+    startShopifyReport();
+  } else {
+    startWooCommerceReport();
+  }
 }
 
 // ---------------------------------------------------------------------------
