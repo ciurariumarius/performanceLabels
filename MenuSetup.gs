@@ -26,7 +26,8 @@ function onOpen() {
   const platform = getActivePlatform();
 
   const menu = ui.createMenu('⚡ Performance Labels')
-      .addItem('▶️ Run All', 'runAllLabelCalculations')
+      .addItem('▶️ Run Now', 'runAllLabelCalculations')
+      .addItem('📋 Google Ads Script - To Copy', 'showAdsScriptModal')
       .addSeparator();
 
 
@@ -34,12 +35,12 @@ function onOpen() {
   const devMenu = ui.createMenu('🛠️ Dev');
   
   if (platform === 'shopify') {
-    devMenu.addItem('🛍️ Force Run Shopify', 'startShopifyReport');
+    devMenu.addItem('🛍️ Get Shopify Data', 'startShopifyReport');
   } else {
-    devMenu.addItem('🛒 Force Run WooCommerce', 'startWooCommerceReport');
+    devMenu.addItem('🛒 Get WooCommerce Data', 'startWooCommerceReport');
   }
   
-  devMenu.addItem('🏷️ Calculate Labels Only', 'runAllLabelCalculations');
+  devMenu.addItem('🏷️ Recalculate Labels', 'runAllLabelCalculations');
 
   const settingsMenu = ui.createMenu('⚙️ Settings')
       .addItem('🔑 Update Settings', 'showSettingsDialog')
@@ -153,5 +154,17 @@ function showDocumentation() {
   const html = HtmlService.createHtmlOutputFromFile('README')
       .setWidth(480)
       .setHeight(520);
-  SpreadsheetApp.getUi().showModalDialog(html, '📖 Performance Labels — Documentation');
+// ---------------------------------------------------------------------------
+// Google Ads Script Copy Modal
+// ---------------------------------------------------------------------------
+
+function showAdsScriptModal() {
+  const template = HtmlService.createTemplateFromFile('AdsScriptModal');
+  template.adsScriptContent = getGoogleAdsScriptContent();
+  
+  const html = template.evaluate()
+      .setWidth(700)
+      .setHeight(650);
+      
+  SpreadsheetApp.getUi().showModalDialog(html, '📋 Google Ads Script');
 }

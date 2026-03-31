@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        padding: 20px;
+        color: #3c4043;
+        line-height: 1.5;
+        background-color: #f8f9fa;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      h2 {
+        color: #1a73e8;
+        margin-top: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .instructions {
+        background-color: #e8f0fe;
+        border-left: 4px solid #1a73e8;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+      .code-container {
+        position: relative;
+        background-color: #ffffff;
+        border: 1px solid #dadce0;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      pre {
+        margin: 0;
+        padding: 20px;
+        max-height: 400px;
+        overflow-y: auto;
+        font-family: 'Roboto Mono', monospace;
+        font-size: 12px;
+        white-space: pre-wrap;
+        word-break: break-all;
+        color: #202124;
+      }
+      .copy-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: #1a73e8;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 13px;
+        transition: background-color 0.2s;
+        box-shadow: 0 1px 2px rgba(60,64,67,0.3);
+      }
+      .copy-btn:hover {
+        background-color: #1765cc;
+      }
+      .copy-btn:active {
+        background-color: #1557b0;
+      }
+      .footer {
+        margin-top: 20px;
+        text-align: right;
+      }
+      .cancel-btn {
+        background: none;
+        border: 1px solid #dadce0;
+        color: #5f6368;
+        padding: 8px 24px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 500;
+      }
+      .cancel-btn:hover {
+        background-color: #f1f3f4;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>📊 Google Ads Script — Copy & Paste</h2>
+      
+      <div class="instructions">
+        <strong>How to use:</strong>
+        <ol>
+          <li>Click the <strong>"Copy to Clipboard"</strong> button below.</li>
+          <li>Go to your <a href="https://ads.google.com" target="_blank">Google Ads Account</a>.</li>
+          <li>Navigate to <strong>Tools & Settings → Scripts</strong>.</li>
+          <li>Click <strong>+ New Script</strong>, delete any existing text, and paste this code.</li>
+          <li>Click <strong>Authorize</strong> and then <strong>Run</strong>.</li>
+        </ol>
+      </div>
+
+      <div class="code-container">
+        <button class="copy-btn" id="copyBtn" onclick="copyCode()">Copy to Clipboard</button>
+        <pre id="adsCode"><?!= adsScriptContent ?></pre>
+      </div>
+
+      <div class="footer">
+        <button class="cancel-btn" onclick="google.script.host.close()">Close</button>
+      </div>
+    </div>
+
+    <script>
+      function copyCode() {
+        const codeElement = document.getElementById('adsCode');
+        const textArea = document.createElement('textarea');
+        textArea.value = codeElement.textContent;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        const btn = document.getElementById('copyBtn');
+        const originalText = btn.innerText;
+        btn.innerText = '✅ Copied!';
+        btn.style.backgroundColor = '#0f9d58';
+        
+        setTimeout(() => {
+          btn.innerText = originalText;
+          btn.style.backgroundColor = '#1a73e8';
+        }, 2000);
+      }
+    </script>
+  </body>
+</html>
