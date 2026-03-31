@@ -15,9 +15,8 @@
  */
 
 // --- Script-level Constants (with unique names) ---
-const PRICE_CONFIG_SHEET_NAME = "Config";
 const PRICE_METRICS_SHEET_NAME = "Metrics";
-const PRICE_LABELS_SHEET_NAME = "Labels Feed";
+const PRICE_LABELS_SHEET_NAME = "GMC_Feed";
 const PRICE_HEADER_ROW_NUM = 1;
 
 // --- Column Headers (with unique names) ---
@@ -33,11 +32,7 @@ function runPriceLabels() {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     
     // --- 1. Load and Validate Configuration ---
-    const configSheet = spreadsheet.getSheetByName(PRICE_CONFIG_SHEET_NAME);
-    if (!configSheet) {
-      throw new Error(`Sheet "${PRICE_CONFIG_SHEET_NAME}" not found.`);
-    }
-    const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(configSheet);
+    const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(null);
     const priceIntervalStep = getConfigValue(SCRIPT_CONFIGS, "Price Interval Step", 'float', 50.0);
 
     if (priceIntervalStep <= 0) {

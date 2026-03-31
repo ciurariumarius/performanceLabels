@@ -16,9 +16,8 @@
  */
 
 // --- Script-level Constants ---
-const PERF_CONFIG_SHEET_NAME = "Config";
 const PERF_METRICS_SHEET_NAME = "Metrics";
-const PERF_LABELS_SHEET_NAME = "Labels Feed";
+const PERF_LABELS_SHEET_NAME = "GMC_Feed";
 const PERF_HEADER_ROW_NUM = 1;
 
 const PERF_OUTPUT_LABEL_HEADER = "LABEL_PERFORMANCE_INDEX";
@@ -36,8 +35,7 @@ function runPerformanceIndexLabel() {
     }
 
     // --- 1. Load and Validate Configuration ---
-    const configSheet = spreadsheet.getSheetByName(PERF_CONFIG_SHEET_NAME);
-    const SCRIPT_CONFIGS = configSheet ? loadConfigurationsFromSheetObject(configSheet) : {};
+    const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(null);
     
     // Use helper to get values or defaults
     const config = {

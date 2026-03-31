@@ -1,0 +1,16 @@
+<!-- 
+CHANGELOG
+=========
+
+2026-03-31
+----------
+- WooCommerceData.gs: Fixed a ReferenceError in processBatchCore_ where `props` was used instead of `scriptProperties`. This allows the script to correctly pause and save its batch state when approaching the execution time limit without crashing.
+- Config.gs: Centralized configuration logic into a single codebase file, deprecating the obsolete "Config" spreadsheet tab for user configurations.
+- Security Hardening: Removed plain-text API keys from fetcher files. Implemented a secure UI prompt via MenuSetup.gs that saves API credentials and store domains securely into the user's Script Properties.
+- Label Mappings: Refactored the FEED_EXPORT_MAPPING object in Config.gs. Disabling a metric by assigning an empty string `""` now seamlessly skips column creation and calculation via upstream logic in CommonUtilities.gs.
+- CommonUtilities.gs: Updated loadConfigurationsFromSheetObject to serve thresholds directly from the new Config.gs objects, removing legacy references to API keys.
+- Code Cleanup: Deleted dead UI listener script `selectSourceConfig.gs` that navigated the deprecated Excel Config UI.
+- Dual Feed Export: Renamed "Labels Feed" sheet to "GMC_Feed" across all 10 script files.
+- Config.gs: Added `ID_PREFIX` and `ID_SUFFIX` settings. When set, a second feed "GMC_Feed_2" is automatically generated with modified IDs (e.g. "wc_post_id_12345" for Facebook/Meta matching).
+
+-->

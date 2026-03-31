@@ -16,9 +16,8 @@
  */
 
 // --- Script-level Constants (with unique names) ---
-const VARIANTS_CONFIG_SHEET_NAME = "Config";
 const VARIANTS_METRICS_SHEET_NAME = "Metrics";
-const VARIANTS_LABELS_SHEET_NAME = "Labels Feed";
+const VARIANTS_LABELS_SHEET_NAME = "GMC_Feed";
 const VARIANTS_HEADER_ROW_NUM = 1;
 
 // --- Column Headers (with unique names) ---
@@ -37,8 +36,7 @@ function runAvailableVariantsLabel() {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     
     // --- 0. Load Configuration (Added for dynamic headers) ---
-    const configSheet = spreadsheet.getSheetByName(VARIANTS_CONFIG_SHEET_NAME);
-    const SCRIPT_CONFIGS = configSheet ? loadConfigurationsFromSheetObject(configSheet) : {};
+    const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(null);
 
     const metricsSheet = spreadsheet.getSheetByName(VARIANTS_METRICS_SHEET_NAME);
     if (!metricsSheet) {

@@ -47,13 +47,6 @@ function setupWooCommerceComplete() {
  * OPTION 2: Shopify Complete Setup
  * --------------------------------
  * Sets up:
- * 1. Shopify Daily Report (5:00 AM)
- * 2. Label Calculations (Daily at 6:00 AM)
- */
-/**
- * OPTION 2: Shopify Complete Setup
- * --------------------------------
- * Sets up:
  * 1. Shopify Daily Start (5:00 AM)
  * 2. Shopify Worker (Every 5 mins)
  * 3. Label Calculations (Daily at 6:00 AM)

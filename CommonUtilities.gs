@@ -17,59 +17,38 @@
  * @param {GoogleAppsScript.Spreadsheet.Sheet} configSheet The sheet object to read from.
  * @return {object} An object where keys are labels from Col A and values are from Col B. Returns empty object on error.
  */
-/**
- * Loads configurations from a specified sheet.
- * Assumes a two-column layout where Column A contains labels and Column B contains values.
- * Uses CacheService to minimize Spreadsheet reads (caches for 10 minutes).
- *
- * @param {GoogleAppsScript.Spreadsheet.Sheet} configSheet The sheet object to read from.
- * @return {object} An object where keys are labels from Col A and values are from Col B. Returns empty object on error.
- */
 function loadConfigurationsFromSheetObject(configSheet) {
-  if (!configSheet) {
-    Logger.log("Error in CommonUtilities: The provided configSheet object was null.");
-    return {};
-  }
-
-  const sheetName = configSheet.getName();
-  const cacheKey = `CONFIG_CACHE_${sheetName}`;
-  const cache = CacheService.getScriptCache();
+  // We no longer read from the sheet. We return a mapping from the centralized AppConfig
+  // so that all existing scripts (calculating labels) don't need to be rewritten.
+  Logger.log("Loading configurations from Config.gs...");
   
-  // 1. Try Cache
-  const cachedData = cache.get(cacheKey);
-  if (cachedData) {
-    // Logger.log(`Loaded config for "${sheetName}" from cache.`);
-    return JSON.parse(cachedData);
-  }
-
-  // 2. Fetch from Sheet
-  Logger.log(`Cache miss for "${sheetName}". Fetching from sheet...`);
-  const configurations = {};
-  
-  try {
-    const lastRow = configSheet.getLastRow();
-    if (lastRow < 1) return {};
-
-    const dataRange = configSheet.getRange("A1:B" + lastRow);
-    const data = dataRange.getValues();
-
-    for (const row of data) {
-      const label = String(row[0]).trim();
-      if (label) {
-        configurations[label] = row[1]; // Store the value from column B
-      }
-    }
+  return {
+    "ROAS Good": AppConfig.ROAS.Good,
+    "ROAS Bad": AppConfig.ROAS.Bad,
+    "Conversion Rate Good": AppConfig.ConversionRate.Good,
+    "Conversion Rate Bad": AppConfig.ConversionRate.Bad,
+    "Clicks High": AppConfig.Clicks.High,
+    "Clicks Low": AppConfig.Clicks.Low,
+    "Low Revenue Threshold": AppConfig.Revenue.LowThresholdPercent,
+    "High Revenue Threshold": AppConfig.Revenue.HighThresholdPercent,
+    "Price Interval Step": AppConfig.PriceIntervalStep,
+    "Nr. of Orders Threshold": AppConfig.Orders.Threshold,
+    "New Product Days": AppConfig.NewProductDays,
+    "Timeframe": AppConfig.TimeframeDays,
     
-    // 3. Save to Cache only if we actually found labels
-    if (Object.keys(configurations).length > 0) {
-      cache.put(cacheKey, JSON.stringify(configurations), 600);
-    }
-    return configurations;
-
-  } catch (e) {
-    Logger.log(`Error in CommonUtilities while loading configurations: ${e.message}`);
-    return {}; // Return empty object on error
-  }
+    // Label Mappings
+    "LABEL_GADS_ROAS": AppConfig.LabelsMapping.LABEL_GADS_ROAS,
+    "LABEL_GADS_CONV_RATE": AppConfig.LabelsMapping.LABEL_GADS_CONV_RATE,
+    "LABEL_GADS_CLICKS": AppConfig.LabelsMapping.LABEL_GADS_CLICKS,
+    "LABEL_REVENUE_SIMPLE": AppConfig.LabelsMapping.LABEL_REVENUE_SIMPLE,
+    "LABEL_REVENUE_ADVANCED": AppConfig.LabelsMapping.LABEL_REVENUE_ADVANCED,
+    "LABEL_PRICE_INTERVAL": AppConfig.LabelsMapping.LABEL_PRICE_INTERVAL,
+    "LABEL_PERFORMANCE_INDEX": AppConfig.LabelsMapping.LABEL_PERFORMANCE_INDEX,
+    "LABEL_AVAILABLE_VARIANTS": AppConfig.LabelsMapping.LABEL_AVAILABLE_VARIANTS,
+    "LABEL_ORDERS": AppConfig.LabelsMapping.LABEL_ORDERS,
+    "LABEL_TREND": AppConfig.LabelsMapping.LABEL_TREND,
+    "LABEL_NEW": AppConfig.LabelsMapping.LABEL_NEW
+  };
 }
 
 /**
@@ -149,6 +128,11 @@ function getOrCreateSheet(spreadsheet, sheetName) {
  * @return {number} The column number (1-indexed) of the header.
  */
 function findOrCreateHeaderColumn(sheet, headerName, headerRow = 1) {
+  if (!headerName || String(headerName).trim() === "") {
+    Logger.log("Header name is empty. Skipping column creation.");
+    return -1; 
+  }
+
   const lastCol = sheet.getLastColumn();
   // Read headers only if there are columns to read
   const headers = lastCol > 0 ? sheet.getRange(headerRow, 1, 1, lastCol).getValues()[0] : [];
@@ -440,6 +424,11 @@ function fetchJsonWithRetries(endpoint, options, retries = 3) {
 function writeValuesToSheetSafe(sheet, startRow, startCol, values, chunkSize = 5000) {
   if (!values || values.length === 0) {
     Logger.log("writeValuesToSheetSafe: No values to write.");
+    return;
+  }
+  
+  if (startCol < 1) {
+    Logger.log("writeValuesToSheetSafe: Column is disabled (startCol < 1). Skipping write operation entirely.");
     return;
   }
 

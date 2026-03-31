@@ -11,7 +11,8 @@
 // --- Configuration ---
 // Please set the spreadsheet URL here manually.
 const SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1HO82WNMbtO6-_UYqSOsBjF-s3WYNdW5bhyGAZUW3S2E/edit?gid=0#gid=0";
-const CONFIG_SHEET_NAME = "Config";
+// Set this to match TIMEFRAME_DAYS in Config.gs
+const TIMEFRAME_DAYS = 30;
 const GADS_SHEET_NAME = "GAds";
 
 /**
@@ -19,12 +20,11 @@ const GADS_SHEET_NAME = "GAds";
  */
 function main() {
   try {
-    // 1. Load Configuration (Timeframe) from Sheet
-    const config = fetchTimeframeConfig();
-    const dateRange = last_n_days(config.DAYS);
+    // 1. Build date range from top-level constant (mirrors TIMEFRAME_DAYS in Config.gs)
+    const dateRange = last_n_days(TIMEFRAME_DAYS);
     const dateRangeParts = dateRange.split(',');
     
-    Logger.log(`Running for the last ${config.DAYS} days (${dateRangeParts[0]} to ${dateRangeParts[1]}).`);
+    Logger.log(`Running for the last ${TIMEFRAME_DAYS} days (${dateRangeParts[0]} to ${dateRangeParts[1]}).`);
 
     // 2. Fetch Report Data
     // We only need raw metrics here. Labels will be calculated in the sheet script.
@@ -76,7 +76,7 @@ function main() {
 
     upsertAccountDataRow(SpreadsheetApp.openByUrl(SPREADSHEET_URL), "AccountData", {
       source: `Google Ads - ${accountName}`,
-      timeframe: `Last ${config.DAYS} Days`,
+      timeframe: `Last ${TIMEFRAME_DAYS} Days`,
       revenue: totals.convValue.toFixed(2), // Revenue = Conversion Value
       cost: totals.cost.toFixed(2),
       orders: Math.round(totals.conversions), // Orders = Conversions
@@ -226,23 +226,6 @@ function aggregateProductDataAndTotals(rows) {
   return { productData, totals };
 }
 
-/**
- * Fetches the 'DAYS' configuration from the Config sheet.
- */
-function fetchTimeframeConfig() {
-  const spreadsheet = SpreadsheetApp.openByUrl(SPREADSHEET_URL);
-  const sheet = spreadsheet.getSheetByName(CONFIG_SHEET_NAME);
-  if (!sheet) throw new Error(`Sheet "${CONFIG_SHEET_NAME}" not found.`);
-
-  const daysValue = sheet.getRange("B5").getValue();
-  const days = parseInt(daysValue, 10);
-  
-  if (isNaN(days)) {
-    throw new Error("Invalid 'DAYS' value in Config sheet (Cell B5).");
-  }
-
-  return { DAYS: days };
-}
 
 /**
  * Pushes data to the specified sheet using batch operations.

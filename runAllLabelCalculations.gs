@@ -1,5 +1,6 @@
 const METRICS_SHEET_NAME = "Metrics";
-const LABELS_SHEET_NAME = "Labels Feed";
+const LABELS_SHEET_NAME = "GMC_Feed";
+const LABELS_SHEET_2_NAME = "GMC_Feed_2";
 const GADS_SHEET_NAME_SOURCE = "GAds";
 const SHOPIFY_SHEET_NAME_SOURCE = "Shopify";
 const WOOCOMMERCE_SHEET_NAME_SOURCE = "WooCommerce";
@@ -76,19 +77,30 @@ function consolidateMetrics(ss) {
     writeValuesToSheetSafe(metricsSheet, 2, 1, combinedData);
     
     // Formatting
-    const lastRow = combinedData.length + 1;
     metricsSheet.getRange(2, 4, combinedData.length, 3).setNumberFormat("#,##0.00"); 
     metricsSheet.getRange(2, 12, combinedData.length, 1).setNumberFormat("#,##0.00"); 
     metricsSheet.getRange(2, 14, combinedData.length, 1).setNumberFormat("#,##0.00"); 
     
-    // Initialize Labels Feed Sheet
+    // --- Initialize GMC_Feed (primary: raw IDs) ---
     const labelsSheet = getOrCreateSheet(ss, LABELS_SHEET_NAME);
     labelsSheet.clear(); 
-    const labelsHeader = ["id"]; 
-    labelsSheet.getRange(1, 1, 1, 1).setValues([labelsHeader]).setFontWeight("bold");
-    
+    labelsSheet.getRange(1, 1, 1, 1).setValues([["id"]]).setFontWeight("bold");
     const idColumnData = combinedData.map(row => [row[0]]);
     writeValuesToSheetSafe(labelsSheet, 2, 1, idColumnData);
+
+    // --- Initialize GMC_Feed_2 (secondary: ID-modified, only created if prefix/suffix is configured) ---
+    const prefix = AppConfig.IdPrefix || "";
+    const suffix = AppConfig.IdSuffix || "";
+    if (prefix || suffix) {
+      const labelsSheet2 = getOrCreateSheet(ss, LABELS_SHEET_2_NAME);
+      labelsSheet2.clear();
+      labelsSheet2.getRange(1, 1, 1, 1).setValues([["id"]]).setFontWeight("bold");
+      const idColumnData2 = combinedData.map(row => [prefix + String(row[0]) + suffix]);
+      writeValuesToSheetSafe(labelsSheet2, 2, 1, idColumnData2);
+      Logger.log(`GMC_Feed_2 generated with prefix="${prefix}" suffix="${suffix}"`);
+    } else {
+      Logger.log("GMC_Feed_2 skipped: ID_PREFIX and ID_SUFFIX are both empty in Config.gs.");
+    }
   }
 }
 

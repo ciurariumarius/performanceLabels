@@ -16,9 +16,8 @@
  */
 
 // --- Script-level Constants (with unique names) ---
-const REVENUE_CONFIG_SHEET_NAME = "Config";
 const REVENUE_METRICS_SHEET_NAME = "Metrics";
-const REVENUE_LABELS_SHEET_NAME = "Labels Feed";
+const REVENUE_LABELS_SHEET_NAME = "GMC_Feed";
 const REVENUE_HEADER_ROW_NUM = 1;
 
 // --- Column Headers (with unique names) ---
@@ -35,11 +34,7 @@ function runRevenueLabels() {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     
     // --- 1. Load and Validate Configuration ---
-    const configSheet = spreadsheet.getSheetByName(REVENUE_CONFIG_SHEET_NAME);
-    if (!configSheet) {
-      throw new Error(`Sheet "${REVENUE_CONFIG_SHEET_NAME}" not found.`);
-    }
-    const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(configSheet);
+    const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(null);
     const config = {
       lowThreshold: getConfigValue(SCRIPT_CONFIGS, "Low Revenue Threshold", 'float', 50.0) / 100,
       highThreshold: getConfigValue(SCRIPT_CONFIGS, "High Revenue Threshold", 'float', 150.0) / 100,

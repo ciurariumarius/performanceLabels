@@ -14,9 +14,8 @@
  */
 
 // --- Script-level Constants (with unique names) ---
-const NEW_PROD_CONFIG_SHEET_NAME = "Config";
 const NEW_PROD_METRICS_SHEET_NAME = "Metrics";
-const NEW_PROD_LABELS_SHEET_NAME = "Labels Feed";
+const NEW_PROD_LABELS_SHEET_NAME = "GMC_Feed";
 const NEW_PROD_HEADER_ROW_NUM = 1;
 
 // --- Column Headers (with unique names) ---
@@ -36,15 +35,11 @@ function runNewProductLabelCalculation() {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     
     // --- 1. Load and Validate Configuration ---
-    const configSheet = spreadsheet.getSheetByName(NEW_PROD_CONFIG_SHEET_NAME);
-    if (!configSheet) {
-      throw new Error(`Sheet "${NEW_PROD_CONFIG_SHEET_NAME}" not found.`);
-    }
-    const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(configSheet);
+    const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(null);
     const newProductDays = getConfigValue(SCRIPT_CONFIGS, "New Product Days", 'int', 30);
 
     if (newProductDays <= 0) {
-      throw new Error(`Configuration "New Product Days" must be a positive number in '${NEW_PROD_CONFIG_SHEET_NAME}'.`);
+      throw new Error(`Configuration "New Product Days" must be a positive number.`);
     }
     Logger.log(`New Product Label Config: Using a threshold of ${newProductDays} days.`);
 

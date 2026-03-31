@@ -12,7 +12,6 @@
 'use strict';
 
 // --- Configuration ---
-const WOO_CONFIG_SHEET_NAME = "Config";
 const WOO_DATA_SHEET_NAME = "WooCommerce";
 const WOO_ACCOUNT_SHEET_NAME = "AccountData";
 const TEMP_FILENAME = "temp_woo_batch_data.json"; 
@@ -288,7 +287,7 @@ function processBatchCore_() {
           if (!doneWriting) {
               // Save state and exit if not done
               saveDataToDrive_(productMap);
-              props.setProperty('WOO_BATCH_STATE', JSON.stringify(state));
+              scriptProperties.setProperty('WOO_BATCH_STATE', JSON.stringify(state));
               return; 
           }
       }
@@ -439,17 +438,17 @@ function loadDataFromDrive_() {
  * Loads configuration from the Config sheet using CommonUtilities.
  */
 function loadWooConfig_(ss) {
-  const sheet = ss.getSheetByName(WOO_CONFIG_SHEET_NAME);
-  if (!sheet) throw new Error(`Sheet "${WOO_CONFIG_SHEET_NAME}" missing.`);
+  const days = AppConfig.TimeframeDays;
   
-  const configs = loadConfigurationsFromSheetObject(sheet);
-  const rawUrl = getConfigValue(configs, "WooCommerce Domain", 'string');
+  const props = PropertiesService.getScriptProperties();
+  const rawUrl = props.getProperty('WOOCOMMERCE_DOMAIN');
   const shopUrl = ensureHttps(rawUrl);
-  const days = getConfigValue(configs, "Timeframe", 'int', 30);
-  const key = getConfigValue(configs, "WooCommerce API Key", 'string');
-  const secret = getConfigValue(configs, "WooCommerce API Secret", 'string');
+  const key = props.getProperty('WOOCOMMERCE_API_KEY');
+  const secret = props.getProperty('WOOCOMMERCE_API_SECRET');
 
-  if (!shopUrl || !key || !secret) throw new Error("Missing config.");
+  if (!shopUrl || !key || !secret) {
+    throw new Error("Missing WooCommerce Settings! Please use the 'Performance Labels -> Setup & Fetch -> Set Store Settings' menu in your Sheet.");
+  }
 
   return {
     shopUrl: shopUrl,

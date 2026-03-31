@@ -1,14 +1,13 @@
 /**
  * @file calculateGoogleAdsLabels.gs
  * @description Calculates performance labels for Google Ads data.
- * Reads raw metrics from the "GAds" sheet (synced by the external Google Ads script)
- * and applies logic (ROAS, CVR, Clicks) based on thresholds in the "Config" sheet.
+ * Reads raw metrics from the "Metrics" sheet and applies logic (ROAS, CVR, Clicks)
+ * based on thresholds configured in Config.gs.
  */
 
 // --- Constants ---
-const GADS_CONFIG_SHEET_NAME = "Config";
-const GADS_DATA_SHEET_NAME = "Metrics"; // The sheet where raw data lands
-const GADS_LABELS_SHEET_NAME = "Labels Feed";
+const GADS_DATA_SHEET_NAME = "Metrics";
+const GADS_LABELS_SHEET_NAME = "GMC_Feed";
 const GADS_HEADER_ROW_NUM = 1;
 
 // Thresholds
@@ -26,24 +25,18 @@ function runGoogleAdsLabelCalculation() {
   try {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
 
-    // 1. Load Configuration
-    const configSheet = spreadsheet.getSheetByName(GADS_CONFIG_SHEET_NAME);
-    if (!configSheet) throw new Error(`Sheet "${GADS_CONFIG_SHEET_NAME}" not found.`);
-    
-    // Load full Key-Value pairs for dynamic headers
-    const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(configSheet);
+    // 1. Load Configuration from AppConfig (via CommonUtilities)
+    const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(null);
 
-    // Keep existing threshold loading logic (specific cells)
     const config = {
-      roasGood: parseFloatSafe(configSheet.getRange("B6").getValue(), 4.0),
-      roasBad: parseFloatSafe(configSheet.getRange("B7").getValue(), 2.0),
-      cvrGood: parseFloatSafe(configSheet.getRange("B8").getValue(), 1.5),
-      cvrBad: parseFloatSafe(configSheet.getRange("B9").getValue(), 0.5),
-      clicksHigh: parseFloatSafe(configSheet.getRange("B10").getValue(), 100),
-      clicksLow: parseFloatSafe(configSheet.getRange("B11").getValue(), 20)
+      roasGood:   getConfigValue(SCRIPT_CONFIGS, "ROAS Good",            'float', 4.0),
+      roasBad:    getConfigValue(SCRIPT_CONFIGS, "ROAS Bad",             'float', 2.0),
+      cvrGood:    getConfigValue(SCRIPT_CONFIGS, "Conversion Rate Good", 'float', 1.5),
+      cvrBad:     getConfigValue(SCRIPT_CONFIGS, "Conversion Rate Bad",  'float', 0.5),
+      clicksHigh: getConfigValue(SCRIPT_CONFIGS, "Clicks High",          'float', 100),
+      clicksLow:  getConfigValue(SCRIPT_CONFIGS, "Clicks Low",           'float', 20)
     };
-    
-    Logger.log("Loaded Google Ads Config:", config);
+    Logger.log("Loaded Google Ads Config: " + JSON.stringify(config));
 
     // 2. Read Data
     const dataSheet = spreadsheet.getSheetByName(GADS_DATA_SHEET_NAME);
@@ -146,9 +139,7 @@ function writeGAdsLabelsToSheet_(sheet, labels, config = {}) {
   const cvrCol = findOrCreateHeaderColumn(sheet, cvrHeader, GADS_HEADER_ROW_NUM);
   const clicksCol = findOrCreateHeaderColumn(sheet, clicksHeader, GADS_HEADER_ROW_NUM);
 
-  const numRows = labels.length;
-  // Write column by column safely
-  writeValuesToSheetSafe(sheet, GADS_HEADER_ROW_NUM + 1, roasCol, labels.map(r => [r[0]]));
-  writeValuesToSheetSafe(sheet, GADS_HEADER_ROW_NUM + 1, cvrCol, labels.map(r => [r[1]]));
-  writeValuesToSheetSafe(sheet, GADS_HEADER_ROW_NUM + 1, clicksCol, labels.map(r => [r[2]]));
+  writeValuesToSheetSafe(sheet, GADS_HEADER_ROW_NUM + 1, roasCol,    labels.map(r => [r[0]]));
+  writeValuesToSheetSafe(sheet, GADS_HEADER_ROW_NUM + 1, cvrCol,     labels.map(r => [r[1]]));
+  writeValuesToSheetSafe(sheet, GADS_HEADER_ROW_NUM + 1, clicksCol,  labels.map(r => [r[2]]));
 }

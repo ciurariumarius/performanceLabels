@@ -14,9 +14,8 @@
  */
 
 // --- Script-level Constants (with unique names) ---
-const TREND_CONFIG_SHEET_NAME = "Config";
 const TREND_METRICS_SHEET_NAME = "Metrics";
-const TREND_LABELS_SHEET_NAME = "Labels Feed";
+const TREND_LABELS_SHEET_NAME = "GMC_Feed";
 const TREND_HEADER_ROW_NUM = 1;
 
 // --- Column Headers (with unique names) ---
@@ -38,16 +37,12 @@ function runTrendLabelCalculation() {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     
     // --- 1. Load and Validate Configuration ---
-    const configSheet = spreadsheet.getSheetByName(TREND_CONFIG_SHEET_NAME);
-    if (!configSheet) {
-      throw new Error(`Sheet "${TREND_CONFIG_SHEET_NAME}" not found.`);
-    }
-    const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(configSheet);
+    const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(null);
     const timeframeDays = getConfigValue(SCRIPT_CONFIGS, "Timeframe", 'int', 30);
     const orderThreshold = getConfigValue(SCRIPT_CONFIGS, "Nr. of Orders Threshold", 'int', 0);
 
     if (timeframeDays <= 0) {
-      throw new Error(`Configuration "Timeframe" must be a positive number in '${TREND_CONFIG_SHEET_NAME}'.`);
+      throw new Error(`Configuration "Timeframe" must be a positive number.`);
     }
     Logger.log(`Trend Label Config: Timeframe ${timeframeDays} days, Order Threshold ${orderThreshold}.`);
 

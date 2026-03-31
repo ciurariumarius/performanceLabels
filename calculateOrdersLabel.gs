@@ -15,9 +15,8 @@
  */
 
 // --- Script-level Constants (with unique names) ---
-const ORDERS_CONFIG_SHEET_NAME = "Config";
 const ORDERS_METRICS_SHEET_NAME = "Metrics";
-const ORDERS_LABELS_SHEET_NAME = "Labels Feed";
+const ORDERS_LABELS_SHEET_NAME = "GMC_Feed";
 const ORDERS_HEADER_ROW_NUM = 1;
 
 // --- Column Headers (with unique names) ---
@@ -34,11 +33,7 @@ function runOrdersLabel() {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     
     // --- 1. Load and Validate Configuration ---
-    const configSheet = spreadsheet.getSheetByName(ORDERS_CONFIG_SHEET_NAME);
-    if (!configSheet) {
-      throw new Error(`Sheet "${ORDERS_CONFIG_SHEET_NAME}" not found.`);
-    }
-    const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(configSheet);
+    const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(null);
     const orderThreshold = getConfigValue(SCRIPT_CONFIGS, "Nr. of Orders Threshold", 'int', 0);
     Logger.log(`Orders Label Config: Using order threshold of ${orderThreshold}.`);
 

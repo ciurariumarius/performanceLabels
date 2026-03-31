@@ -12,7 +12,6 @@
 'use strict';
 
 // --- Configuration ---
-const SHOPIFY_CONFIG_SHEET_NAME = "Config";
 const SHOPIFY_PRODUCT_DATA_SHEET_NAME = "Shopify";
 const SHOPIFY_ACCOUNT_SHEET_NAME = "AccountData";
 const SHOPIFY_TEMP_FILENAME = "temp_shopify_batch_data.json";
@@ -22,14 +21,7 @@ const SHOPIFY_MAX_EXECUTION_TIME_MS = 1000 * 60 * 4;
 const SHOPIFY_ITEMS_PER_PAGE = 250; // Increased page size for efficiency
 const SHOPIFY_API_VERSION = '2024-04';
 
-/**
- * Product ID format sent to GTM/GA4.
- * - 'shopify'   => shopify_COUNTRY_productId_variantId
- * - 'variant_id' => variant ID only
- * - 'parent_id'  => product ID only
- */
-const PRODUCT_ID_FORMAT = 'shopify'; 
-const PRODUCT_COUNTRY_CODE = 'zz'; 
+// 🛍️ Shopify ID format and country code are configured in Config.gs (SHOPIFY_PRODUCT_ID_FORMAT, SHOPIFY_COUNTRY_CODE).
 
 /**
  * TRIGGER 1 (DAILY): Starts the job.
@@ -451,43 +443,17 @@ function determineShopifyStockStatus_(variant) {
  * Reads Client ID and Client Secret directly from Config sheet (columns A = label, B = value).
  * Use when loadConfigurationsFromSheetObject only reads a fixed range and misses new rows.
  */
-function getShopifyClientCredentialsFromSheet_(sheet) {
-  const data = sheet.getDataRange().getValues();
-  let clientId = '';
-  let clientSecret = '';
-  for (let i = 0; i < data.length; i++) {
-    const label = String(data[i][0] || '').trim();
-    const value = String(data[i][1] || '').trim();
-    const labelLower = label.toLowerCase();
-    if (labelLower.indexOf('client id') !== -1 && labelLower.indexOf('secret') === -1 && value) {
-      clientId = value;
-    }
-    if (labelLower.indexOf('client secret') !== -1 && value) {
-      clientSecret = value;
-    }
-  }
-  return { clientId: clientId || null, clientSecret: clientSecret || null };
-}
-
 function loadShopifyConfig_(ss) {
-  const sheet = ss.getSheetByName(SHOPIFY_CONFIG_SHEET_NAME);
-  if (!sheet) throw new Error("Shopify Config sheet missing.");
-  const configs = loadConfigurationsFromSheetObject(sheet);
-  
-  const domain = getConfigValue(configs, "Shopify Domain", 'string');
-  let clientId = getConfigValue(configs, "Shopify Client ID", 'string') || getConfigValue(configs, "Shopify Client Id", 'string');
-  let clientSecret = getConfigValue(configs, "Shopify Client Secret", 'string') || getConfigValue(configs, "Shopify client secret", 'string');
-  const days = getConfigValue(configs, "Timeframe", 'int', 30);
+  const days = AppConfig.TimeframeDays;
 
-  if (!clientId || !clientSecret) {
-    const fromSheet = getShopifyClientCredentialsFromSheet_(sheet);
-    if (fromSheet.clientId) clientId = clientId || fromSheet.clientId;
-    if (fromSheet.clientSecret) clientSecret = clientSecret || fromSheet.clientSecret;
-  }
-  
+  const props = PropertiesService.getScriptProperties();
+  const domain = props.getProperty('SHOPIFY_DOMAIN');
+  const clientId = props.getProperty('SHOPIFY_CLIENT_ID');
+  const clientSecret = props.getProperty('SHOPIFY_CLIENT_SECRET');
+
   if (!domain || !clientId || !clientSecret) {
     console.error(`Config Error: Domain="${domain}", ClientId=${clientId ? "set" : "missing"}, ClientSecret=${clientSecret ? "set" : "missing"}`);
-    throw new Error("Shopify Domain, Client ID and Client Secret are required.");
+    throw new Error("Missing Shopify Settings! Please use the 'Performance Labels -> Setup & Fetch -> Set Store Settings' menu in your Sheet.");
   }
   
   return { 
@@ -495,8 +461,8 @@ function loadShopifyConfig_(ss) {
     clientId, 
     clientSecret, 
     days, 
-    countryCode: PRODUCT_COUNTRY_CODE,
-    idFormat: PRODUCT_ID_FORMAT
+    countryCode: AppConfig.Shopify.CountryCode,
+    idFormat: AppConfig.Shopify.ProductIdFormat
   };
 }
 
