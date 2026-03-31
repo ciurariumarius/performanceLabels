@@ -107,17 +107,17 @@ const FEED_EXPORT_MAPPING = {
 
   // --- REVENUE METRICS ---
   LABEL_REVENUE_SIMPLE:     "custom_label_0",           // Outputs: "has_revenue", "no_revenue"
-  LABEL_REVENUE_ADVANCED:   "advanced_revenue_label",   // Outputs: "high_revenue", "avg_revenue", "low_revenue", "no_revenue"
+  LABEL_REVENUE_ADVANCED:   "",                         // Outputs: "high_revenue", "avg_revenue", "low_revenue", "no_revenue"
 
   // --- SALES & PRODUCT METRICS ---
-  LABEL_ORDERS:             "orders_label",             // Outputs: "no_orders", "one_order", "average_orders", "high_orders"
+  LABEL_ORDERS:             "",                         // Outputs: "no_orders", "one_order", "average_orders", "high_orders"
   LABEL_PRICE_INTERVAL:     "custom_label_1",           // Outputs: "price_{min}_{max}" (e.g., "price_0_50"), "invalid_price"
-  LABEL_AVAILABLE_VARIANTS: "available_variants_label", // Outputs: "{inStock}/{total}" (e.g., "3/5"), ""
-  LABEL_TREND:              "trend_label",              // Outputs: "up_trend", "down_trend", "stable_trend", "no_trend"
-  LABEL_NEW:                "new_label",                // Outputs: "new_product", ""
+  LABEL_AVAILABLE_VARIANTS: "",                         // Outputs: "{inStock}/{total}" (e.g., "3/5"), ""
+  LABEL_TREND:              "",                         // Outputs: "up_trend", "down_trend", "stable_trend", "no_trend"
+  LABEL_NEW:                "",                         // Outputs: "new_product", ""
   
   // --- OVERALL METRICS ---
-  LABEL_PERFORMANCE_INDEX:  "performance_index_label"   // Outputs: "INDEX", "NO-INDEX", "NEAR-INDEX", "LOW-INDEX", "EXCLUDE-INDEX"
+  LABEL_PERFORMANCE_INDEX:  ""                          // Outputs: "INDEX", "NO-INDEX", "NEAR-INDEX", "LOW-INDEX", "EXCLUDE-INDEX"
 };
 
 

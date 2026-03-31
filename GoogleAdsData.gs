@@ -4,6 +4,9 @@
  * It fetches product-level performance data using GAQL and pushes raw metrics
  * to the "GAds" sheet in your Google Spreadsheet.
  * 
+ * ⚠️ WARNING: This file belongs in Google Ads Scripts (ads.google.com → Tools → Scripts).
+ * Do NOT paste it into the Google Sheets Script Editor — it will conflict with Config.gs.
+ * 
  * NOTE: This script does NOT calculate labels. It only syncs data.
  * Label calculation is handled by the spreadsheet-bound script `calculateGoogleAdsLabels.gs`.
  */
@@ -11,8 +14,8 @@
 // --- Configuration ---
 // Please set the spreadsheet URL here manually.
 const SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1HO82WNMbtO6-_UYqSOsBjF-s3WYNdW5bhyGAZUW3S2E/edit?gid=0#gid=0";
-// Set this to match TIMEFRAME_DAYS in Config.gs
-const TIMEFRAME_DAYS = 30;
+// How many days of data to fetch. Keep in sync with TIMEFRAME_DAYS in Config.gs.
+const GADS_TIMEFRAME_DAYS = 30;
 const GADS_SHEET_NAME = "GAds";
 
 /**
@@ -20,11 +23,11 @@ const GADS_SHEET_NAME = "GAds";
  */
 function main() {
   try {
-    // 1. Build date range from top-level constant (mirrors TIMEFRAME_DAYS in Config.gs)
-    const dateRange = last_n_days(TIMEFRAME_DAYS);
+    // 1. Build date range (set GADS_TIMEFRAME_DAYS above to match Config.gs)
+    const dateRange = last_n_days(GADS_TIMEFRAME_DAYS);
     const dateRangeParts = dateRange.split(',');
     
-    Logger.log(`Running for the last ${TIMEFRAME_DAYS} days (${dateRangeParts[0]} to ${dateRangeParts[1]}).`);
+    Logger.log(`Running for the last ${GADS_TIMEFRAME_DAYS} days (${dateRangeParts[0]} to ${dateRangeParts[1]}).`);
 
     // 2. Fetch Report Data
     // We only need raw metrics here. Labels will be calculated in the sheet script.
@@ -76,7 +79,7 @@ function main() {
 
     upsertAccountDataRow(SpreadsheetApp.openByUrl(SPREADSHEET_URL), "AccountData", {
       source: `Google Ads - ${accountName}`,
-      timeframe: `Last ${TIMEFRAME_DAYS} Days`,
+      timeframe: `Last ${GADS_TIMEFRAME_DAYS} Days`,
       revenue: totals.convValue.toFixed(2), // Revenue = Conversion Value
       cost: totals.cost.toFixed(2),
       orders: Math.round(totals.conversions), // Orders = Conversions
