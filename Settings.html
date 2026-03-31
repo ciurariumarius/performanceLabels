@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <base target="_top">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Google Sans', Arial, sans-serif; font-size: 13px; color: #202124; background: #fff; padding: 16px; }
+    h2 { font-size: 15px; font-weight: 600; margin-bottom: 16px; color: #1a73e8; }
+    .section { margin-bottom: 16px; }
+    label { display: block; font-weight: 500; margin-bottom: 4px; color: #3c4043; }
+    .hint { font-size: 11px; color: #80868b; margin-bottom: 6px; }
+    input[type="text"], input[type="password"], select {
+      width: 100%; padding: 7px 10px; border: 1px solid #dadce0;
+      border-radius: 4px; font-size: 13px; color: #202124;
+      transition: border-color .15s;
+    }
+    input:focus, select:focus { outline: none; border-color: #1a73e8; }
+    .platform-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
+    .platform-btn {
+      flex: 1; padding: 8px; border: 2px solid #dadce0; border-radius: 6px;
+      background: #fff; cursor: pointer; font-size: 13px; font-weight: 500;
+      text-align: center; transition: all .15s;
+    }
+    .platform-btn.active { border-color: #1a73e8; background: #e8f0fe; color: #1a73e8; }
+    .platform-section { display: none; }
+    .platform-section.visible { display: block; }
+    .divider { border: none; border-top: 1px solid #e8eaed; margin: 14px 0; }
+    .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+    .btn {
+      padding: 8px 18px; border-radius: 4px; font-size: 13px;
+      font-weight: 500; cursor: pointer; border: none;
+    }
+    .btn-primary { background: #1a73e8; color: #fff; }
+    .btn-primary:hover { background: #1765cc; }
+    .btn-secondary { background: #fff; color: #1a73e8; border: 1px solid #dadce0; }
+    .btn-secondary:hover { background: #f1f3f4; }
+    #status { margin-top: 10px; font-size: 12px; color: #188038; display: none; }
+    #error  { margin-top: 10px; font-size: 12px; color: #c5221f; display: none; }
+  </style>
+</head>
+<body>
+  <h2>⚙️ Platform & API Settings</h2>
+
+  <!-- Platform Selector -->
+  <div class="section">
+    <label>Platform</label>
+    <div class="platform-toggle">
+      <div class="platform-btn" id="btn-woo" onclick="setPlatform('woocommerce')">🛒 WooCommerce</div>
+      <div class="platform-btn" id="btn-shopify" onclick="setPlatform('shopify')">🛍️ Shopify</div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- WooCommerce Fields -->
+  <div id="section-woocommerce" class="platform-section">
+    <div class="section">
+      <label>Store Domain</label>
+      <div class="hint">e.g., myshop.com (no https://)</div>
+      <input type="text" id="woo-domain" placeholder="myshop.com">
+    </div>
+    <div class="section">
+      <label>API Key (ck_...)</label>
+      <input type="password" id="woo-key" placeholder="Leave blank to keep existing">
+    </div>
+    <div class="section">
+      <label>API Secret (cs_...)</label>
+      <input type="password" id="woo-secret" placeholder="Leave blank to keep existing">
+    </div>
+  </div>
+
+  <!-- Shopify Fields -->
+  <div id="section-shopify" class="platform-section">
+    <div class="section">
+      <label>Store Domain</label>
+      <div class="hint">e.g., mystore.myshopify.com</div>
+      <input type="text" id="shopify-domain" placeholder="mystore.myshopify.com">
+    </div>
+    <div class="section">
+      <label>Client ID / API Key</label>
+      <input type="password" id="shopify-id" placeholder="Leave blank to keep existing">
+    </div>
+    <div class="section">
+      <label>Client Secret</label>
+      <input type="password" id="shopify-secret" placeholder="Leave blank to keep existing">
+    </div>
+  </div>
+
+  <div id="status">✅ Settings saved!</div>
+  <div id="error"></div>
+
+  <div class="actions">
+    <button class="btn btn-secondary" onclick="google.script.host.close()">Cancel</button>
+    <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+  </div>
+
+  <script>
+    var currentPlatform = 'woocommerce';
+
+    // On load: get current settings from server
+    google.script.run
+      .withSuccessHandler(function(data) {
+        setPlatform(data.platform || 'woocommerce');
+        document.getElementById('woo-domain').value     = data.wooDomain || '';
+        document.getElementById('shopify-domain').value = data.shopifyDomain || '';
+      })
+      .getCurrentSettingsForDialog();
+
+    function setPlatform(p) {
+      currentPlatform = p;
+      document.getElementById('btn-woo').classList.toggle('active', p === 'woocommerce');
+      document.getElementById('btn-shopify').classList.toggle('active', p === 'shopify');
+      document.getElementById('section-woocommerce').classList.toggle('visible', p === 'woocommerce');
+      document.getElementById('section-shopify').classList.toggle('visible', p === 'shopify');
+    }
+
+    function saveSettings() {
+      var payload = {
+        platform:      currentPlatform,
+        wooDomain:     document.getElementById('woo-domain').value.trim(),
+        wooKey:        document.getElementById('woo-key').value.trim(),
+        wooSecret:     document.getElementById('woo-secret').value.trim(),
+        shopifyDomain: document.getElementById('shopify-domain').value.trim(),
+        shopifyId:     document.getElementById('shopify-id').value.trim(),
+        shopifySecret: document.getElementById('shopify-secret').value.trim(),
+      };
+
+      document.getElementById('status').style.display = 'none';
+      document.getElementById('error').style.display  = 'none';
+
+      google.script.run
+        .withSuccessHandler(function() {
+          document.getElementById('status').style.display = 'block';
+          // Rebuild menu to reflect platform change, then close
+          google.script.run.onOpen();
+          setTimeout(function() { google.script.host.close(); }, 1000);
+        })
+        .withFailureHandler(function(err) {
+          document.getElementById('error').textContent = '❌ ' + err.message;
+          document.getElementById('error').style.display = 'block';
+        })
+        .saveSettingsFromDialog(payload);
+    }
+  </script>
+</body>
+</html>

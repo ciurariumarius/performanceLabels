@@ -23,6 +23,14 @@ const NEW_PRODUCT_DAYS = 30;
 
 
 // ==============================================================================
+// 🛒 PLATFORM
+// ==============================================================================
+// Which e-commerce platform are you using?
+// Options: 'woocommerce'  or  'shopify'
+const PLATFORM = 'woocommerce';
+
+
+// ==============================================================================
 // 🎯 GOOGLE ADS THRESHOLDS (ROAS & Clicks)
 // ==============================================================================
 // If a product's ROAS is >= this number, it gets labeled as "high_roas"
@@ -134,6 +142,7 @@ const FEED_EXPORT_MAPPING = {
 // This maps your simple variables above to the system structure used by the rest of the scripts.
 // ==============================================================================
 const AppConfig = {
+  Platform: PLATFORM,
   TimeframeDays: TIMEFRAME_DAYS,
   NewProductDays: NEW_PRODUCT_DAYS,
   IdPrefix: ID_PREFIX,
