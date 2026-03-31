@@ -74,10 +74,10 @@ function main() {
     
     pushToSpreadsheet(productData, GADS_SHEET_NAME, headers);
 
-    // --- 5. Log to AccountData ---
+    // --- 5. Log to Overview ---
     const accountName = AdsApp.currentAccount().getName();
 
-    upsertAccountDataRow(SpreadsheetApp.openByUrl(SPREADSHEET_URL), "AccountData", {
+    upsertOverviewRow(SpreadsheetApp.openByUrl(SPREADSHEET_URL), "Overview", {
       source: `Google Ads - ${accountName}`,
       timeframe: `Last ${GADS_TIMEFRAME_DAYS} Days`,
       revenue: totals.convValue.toFixed(2), // Revenue = Conversion Value
@@ -95,10 +95,10 @@ function main() {
 }
 
 /**
- * Updates a row in the AccountData sheet based on the Source Name (Column B).
+ * Updates a row in the Overview sheet based on the Source Name (Column B).
  * If the source exists, it overwrites the row. If not, it appends a new row.
  */
-function upsertAccountDataRow(spreadsheet, sheetName, data) {
+function upsertOverviewRow(spreadsheet, sheetName, data) {
   const sheet = ensureSheetExists(spreadsheet, sheetName);
   
   // Headers

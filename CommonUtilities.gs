@@ -280,18 +280,18 @@ function formatDisplayDate(date) {
 // =========================================================================================
 
 /**
- * Updates a row in the AccountData sheet based on the Source Name (Column B).
+ * Updates a row in the Overview sheet based on the Source Name (Column B).
  * If the source exists, it overwrites the row. If not, it appends a new row.
  * 
  * Target Schema:
  * [Timestamp, Source, Timeframe, Revenue, Cost, Orders, OOS #, OOS %]
  * 
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet The active spreadsheet.
- * @param {string} sheetName The name of the AccountData sheet.
+ * @param {string} sheetName The name of the Overview sheet.
  * @param {object} data An object containing the metrics to write.
  *                     { source: "Shopify", timeframe: "30 Days", revenue: 100, cost: 0, orders: 10, oosCount: 2, oosPercent: "10%" }
  */
-function upsertAccountDataRow(spreadsheet, sheetName, data) {
+function upsertOverviewRow(spreadsheet, sheetName, data) {
   const sheet = getOrCreateSheet(spreadsheet, sheetName);
   
   // Headers

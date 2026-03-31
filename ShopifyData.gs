@@ -13,7 +13,7 @@
 
 // --- Configuration ---
 const SHOPIFY_PRODUCT_DATA_SHEET_NAME = "Shopify";
-const SHOPIFY_ACCOUNT_SHEET_NAME = "AccountData";
+const SHOPIFY_ACCOUNT_SHEET_NAME = "Overview";
 const SHOPIFY_TEMP_FILENAME = "temp_shopify_batch_data.json";
 
 // Execution Safety: Run for 4 mins, leaving a 2m buffer.
@@ -130,226 +130,247 @@ function processShopifyBatchCore_() {
     }
     let productMap = loadShopifyDataFromDrive_(); 
 
-    // --- PHASE 1: FETCH PRODUCTS ---
+    // --- EXECUTE CURRENT PHASE ---
     if (state.phase === 'FETCH_PRODUCTS') {
-      logShopifyStatus_("RUNNING", "Fetching Products...");
-      
-      while (state.nextProductUrl) {
-        if (isShopifyTimeUp_(executionStart)) break;
-
-        const response = fetchShopifyUrl_(state.nextProductUrl, accessToken);
-        if (response) {
-          const data = JSON.parse(response.content);
-          
-          if (data.products && data.products.length > 0) {
-            data.products.forEach(product => {
-              product.variants?.forEach(variant => {
-                let formattedProductId;
-                if (config.idFormat === 'variant_id') {
-                  formattedProductId = String(variant.id);
-                } else if (config.idFormat === 'parent_id') {
-                  formattedProductId = String(product.id);
-                } else {
-                  // 'shopify' format: shopify_COUNTRY_productId_variantId
-                  formattedProductId = `shopify_${config.countryCode}_${product.id}_${variant.id}`;
-                }
-                const formattedDate = product.created_at ? formatDisplayDateTime(new Date(product.created_at)) : null;
-
-                productMap[variant.id] = {
-                  formattedId: formattedProductId,
-                  variantId: variant.id,
-                  productId: product.id,
-                  productName: product.title,
-                  variantTitle: variant.title,
-                  price: parseFloatSafe(variant.price, 0.0),
-                  dateCreated: formattedDate,
-                  stockStatus: determineShopifyStockStatus_(variant),
-                  stockQuantity: parseIntSafe(variant.inventory_quantity, 0),
-                  rev: 0,
-                  sold: 0,
-                  rev14: 0,
-                  uniqueOrders: 0
-                };
-                state.totalVariants++;
-              });
-            });
-          }
-          
-          // Pagination: Update next URL from Link header
-          state.nextProductUrl = parseShopifyNextLink_(response.headers['Link']);
-        } else {
-          // INTERRUPT: If response is null after retries, don't clear nextProductUrl.
-          // This allows the NEXT worker tick to try again instead of skipping to orders with 0 products.
-          logShopifyStatus_("PAUSED", "API error during products. Retrying next tick...");
-          saveShopifyDataToDrive_(productMap);
-          PropertiesService.getScriptProperties().setProperty('SHOPIFY_BATCH_STATE', JSON.stringify(state));
-          return; 
-        }
-      }
-
-      if (!state.nextProductUrl) {
-        state.phase = 'FETCH_ORDERS';
-        logShopifyStatus_("RUNNING", "Finished fetching products. Starting orders...");
-      }
+      executeShopifyFetchProductsPhase_(config, state, productMap, executionStart, accessToken);
     }
 
-    // --- PHASE 2: FETCH ORDERS ---
     if (state.phase === 'FETCH_ORDERS' && !isShopifyTimeUp_(executionStart)) {
-      logShopifyStatus_("RUNNING", "Fetching Orders...");
-      
-      const fourteenDaysAgo = new Date(new Date().getTime() - 14 * 86400000);
-
-      // We use a Set to track processed orders in this batch if needed, 
-      // but since we page sequentially, we assume APIs don't return duplicates in one walk.
-      // Ideally, we'd persist the Set, but that's too much memory. 
-      // Sequential paging is safe enough for this logic.
-
-      while (state.nextOrderUrl) {
-        if (isShopifyTimeUp_(executionStart)) break;
-
-        const response = fetchShopifyUrl_(state.nextOrderUrl, accessToken);
-        if (response) {
-          const data = JSON.parse(response.content);
-          
-          if (data.orders && data.orders.length > 0) {
-            data.orders.forEach(order => {
-              if (order.cancelled_at || order.financial_status === 'voided') return;
-
-              state.uniqueOrdersCount++;
-              const orderDate = new Date(order.created_at);
-              const isRecent = orderDate >= fourteenDaysAgo;
-
-              order.line_items?.forEach(item => {
-                const pInfo = productMap[item.variant_id];
-                if (pInfo) {
-                   const itemRev = parseFloatSafe(item.price, 0.0) * parseIntSafe(item.quantity, 0);
-                   const itemQty = parseIntSafe(item.quantity, 0);
-                   
-                   pInfo.rev += itemRev;
-                   pInfo.sold += itemQty;
-                   pInfo.uniqueOrders += 1; // Approx (lines vs orders), but efficient
-                   
-                   state.totalRevenue += itemRev;
-                   state.totalItemsSold += itemQty;
-
-                   if (isRecent) {
-                     pInfo.rev14 += itemRev;
-                   }
-                }
-              });
-            });
-          }
-
-          state.nextOrderUrl = parseShopifyNextLink_(response.headers['Link']);
-        } else {
-          // INTERRUPT: Stop and wait for next tick on error.
-          logShopifyStatus_("PAUSED", "API error during orders. Retrying next tick...");
-          saveShopifyDataToDrive_(productMap);
-          PropertiesService.getScriptProperties().setProperty('SHOPIFY_BATCH_STATE', JSON.stringify(state));
-          return;
-        }
-      }
-
-      if (!state.nextOrderUrl) {
-        state.phase = 'WRITE_DATA';
-        state.writeStartIndex = 0;
-      }
+      executeShopifyFetchOrdersPhase_(config, state, productMap, executionStart, accessToken);
     }
 
-    // --- PHASE 3: WRITE DATA ---
-    if (state.phase === 'WRITE_DATA') {
-      const sheet = getOrCreateSheet(ss, SHOPIFY_PRODUCT_DATA_SHEET_NAME);
-      
-      if (state.writeStartIndex === 0) {
-        sheet.clear();
-        const headers = [
-          "Product ID", "Parent ID", "Variant ID", "Product Name", "Variant Title", "Product Price", "Date Created",
-          "Total Orders", "Total Items Sold", "Total Revenue", "Revenue last 14 days", "Stock Status", "Stock Quantity"
-        ];
-        sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold").setHorizontalAlignment("center");
-      }
-
-      const rows = Object.values(productMap).map(p => [
-        p.formattedId, p.productId, p.variantId, p.productName, p.variantTitle, p.price, p.dateCreated,
-        p.uniqueOrders, p.sold, p.rev, p.rev14,
-        p.stockStatus, p.stockQuantity
-      ]).sort((a,b) => b[9] - a[9]); // Sort by Rev
-
-      if (rows.length > 0) {
-          const CHUNK_SIZE = 2000;
-          let doneWriting = true;
-
-          for (let i = state.writeStartIndex; i < rows.length; i += CHUNK_SIZE) {
-            if (isShopifyTimeUp_(executionStart)) {
-              logShopifyStatus_("PAUSED", `Writing paused at row ${i}...`);
-              state.writeStartIndex = i;
-              doneWriting = false;
-              break;
-            }
-            const chunk = rows.slice(i, i + CHUNK_SIZE);
-            sheet.getRange(2 + i, 1, chunk.length, 13).setValues(chunk);
-            SpreadsheetApp.flush();
-            logShopifyStatus_("WRITING", `Writing rows ${i} - ${i+chunk.length}...`);
-          }
-
-          if (doneWriting) {
-             // Formatting
-             sheet.getRange(2, 6, rows.length, 1).setNumberFormat('#,##0.00'); // Price
-             sheet.getRange(2, 10, rows.length, 2).setNumberFormat('#,##0.00'); // Revenues
-          }
-
-          if (!doneWriting) {
-             saveShopifyDataToDrive_(productMap);
-             scriptProperties.setProperty('SHOPIFY_BATCH_STATE', JSON.stringify(state));
-             return; // Exit and wait for next tick
-          }
-      }
-
-      // --- ACCOUNT DATA LOGGING ---
-      // Stats for OOS
-      let oosWithSalesCount = 0;
-      let totalWithSalesCount = 0;
-      Object.values(productMap).forEach(p => {
-         if (p.rev > 0) {
-           totalWithSalesCount++;
-           if (p.stockStatus !== "in stock") oosWithSalesCount++;
-         }
-      });
-      const oosPercent = totalWithSalesCount > 0 
-        ? ((oosWithSalesCount / totalWithSalesCount) * 100).toFixed(1) + "%" 
-        : "0%";
-
-      upsertAccountDataRow(ss, SHOPIFY_ACCOUNT_SHEET_NAME, {
-        source: `Shopify - ${config.domain}`,
-        timeframe: formatDisplayDateRange(config.days),
-        revenue: state.totalRevenue,
-        orders: state.uniqueOrdersCount,
-        cost: "-",
-        oosCount: oosWithSalesCount,
-        oosPercent: oosPercent
-      });
-
-      logShopifyStatus_("COMPLETED", "Finished successfully.");
-      resetShopifyScript_();
-      scriptProperties.setProperty('SHOPIFY_WORKER_STATUS', 'IDLE');
-      
-      // Daisy-chain: Run Label Calculations immediately after data is ready
-      try {
-        Logger.log("Triggering Label Calculations...");
-        runAllLabelCalculations(); 
-      } catch (e) {
-        console.error("Failed to trigger labels: " + e.message);
-      }
-      return;
+    if (state.phase === 'WRITE_DATA' && !isShopifyTimeUp_(executionStart)) {
+      executeShopifyWriteDataPhase_(config, state, productMap, executionStart, ss);
+      // WRITE_DATA handles its own exit/completion logic
+      return; 
     }
 
-    // Save State
+    // --- PAUSE & SAVE STATE ---
     saveShopifyDataToDrive_(productMap);
     scriptProperties.setProperty('SHOPIFY_BATCH_STATE', JSON.stringify(state));
 
   } catch (e) {
     console.error("Shopify Core Error: " + e.message);
     logShopifyStatus_("ERROR", e.message);
+  }
+}
+
+// =========================================================================================
+// PHASE 1: FETCH PRODUCTS
+// =========================================================================================
+function executeShopifyFetchProductsPhase_(config, state, productMap, executionStart, accessToken) {
+  logShopifyStatus_("RUNNING", "Fetching Products...");
+  
+  while (state.nextProductUrl) {
+    if (isShopifyTimeUp_(executionStart)) break;
+
+    const response = fetchShopifyUrl_(state.nextProductUrl, accessToken);
+    if (response) {
+      const data = JSON.parse(response.content);
+      
+      if (data.products && data.products.length > 0) {
+        data.products.forEach(product => {
+          product.variants?.forEach(variant => {
+            let formattedProductId;
+            if (config.idFormat === 'variant_id') {
+              formattedProductId = String(variant.id);
+            } else if (config.idFormat === 'parent_id') {
+              formattedProductId = String(product.id);
+            } else {
+              // 'shopify' format: shopify_COUNTRY_productId_variantId
+              formattedProductId = `shopify_${config.countryCode}_${product.id}_${variant.id}`;
+            }
+            const formattedDate = product.created_at ? formatDisplayDateTime(new Date(product.created_at)) : null;
+
+            productMap[variant.id] = {
+              formattedId: formattedProductId,
+              variantId: variant.id,
+              productId: product.id,
+              productName: product.title,
+              variantTitle: variant.title,
+              price: parseFloatSafe(variant.price, 0.0),
+              dateCreated: formattedDate,
+              stockStatus: determineShopifyStockStatus_(variant),
+              stockQuantity: parseIntSafe(variant.inventory_quantity, 0),
+              rev: 0,
+              sold: 0,
+              rev14: 0,
+              uniqueOrders: 0
+            };
+            state.totalVariants++;
+          });
+        });
+      }
+      
+      // Pagination: Update next URL from Link header
+      state.nextProductUrl = parseShopifyNextLink_(response.headers['Link']);
+    } else {
+      // INTERRUPT: If response is null after retries, don't clear nextProductUrl.
+      // This allows the NEXT worker tick to try again instead of skipping to orders with 0 products.
+      logShopifyStatus_("PAUSED", "API error during products. Retrying next tick...");
+      saveShopifyDataToDrive_(productMap);
+      PropertiesService.getScriptProperties().setProperty('SHOPIFY_BATCH_STATE', JSON.stringify(state));
+      return; 
+    }
+  }
+
+  if (!state.nextProductUrl) {
+    state.phase = 'FETCH_ORDERS';
+    logShopifyStatus_("RUNNING", "Finished fetching products. Starting orders...");
+  }
+}
+
+// =========================================================================================
+// PHASE 2: FETCH ORDERS
+// =========================================================================================
+function executeShopifyFetchOrdersPhase_(config, state, productMap, executionStart, accessToken) {
+  logShopifyStatus_("RUNNING", "Fetching Orders...");
+  
+  const fourteenDaysAgo = new Date(new Date().getTime() - 14 * 86400000);
+
+  // We use a Set to track processed orders in this batch if needed, 
+  // but since we page sequentially, we assume APIs don't return duplicates in one walk.
+  // Ideally, we'd persist the Set, but that's too much memory. 
+  // Sequential paging is safe enough for this logic.
+
+  while (state.nextOrderUrl) {
+    if (isShopifyTimeUp_(executionStart)) break;
+
+    const response = fetchShopifyUrl_(state.nextOrderUrl, accessToken);
+    if (response) {
+      const data = JSON.parse(response.content);
+      
+      if (data.orders && data.orders.length > 0) {
+        data.orders.forEach(order => {
+          if (order.cancelled_at || order.financial_status === 'voided') return;
+
+          state.uniqueOrdersCount++;
+          const orderDate = new Date(order.created_at);
+          const isRecent = orderDate >= fourteenDaysAgo;
+
+          order.line_items?.forEach(item => {
+            const pInfo = productMap[item.variant_id];
+            if (pInfo) {
+               const itemRev = parseFloatSafe(item.price, 0.0) * parseIntSafe(item.quantity, 0);
+               const itemQty = parseIntSafe(item.quantity, 0);
+               
+               pInfo.rev += itemRev;
+               pInfo.sold += itemQty;
+               pInfo.uniqueOrders += 1; // Approx (lines vs orders), but efficient
+               
+               state.totalRevenue += itemRev;
+               state.totalItemsSold += itemQty;
+
+               if (isRecent) {
+                 pInfo.rev14 += itemRev;
+               }
+            }
+          });
+        });
+      }
+
+      state.nextOrderUrl = parseShopifyNextLink_(response.headers['Link']);
+    } else {
+      // INTERRUPT: Stop and wait for next tick on error.
+      logShopifyStatus_("PAUSED", "API error during orders. Retrying next tick...");
+      saveShopifyDataToDrive_(productMap);
+      PropertiesService.getScriptProperties().setProperty('SHOPIFY_BATCH_STATE', JSON.stringify(state));
+      return;
+    }
+  }
+
+  if (!state.nextOrderUrl) {
+    state.phase = 'WRITE_DATA';
+    state.writeStartIndex = 0;
+  }
+}
+
+// =========================================================================================
+// PHASE 3: WRITE DATA
+// =========================================================================================
+function executeShopifyWriteDataPhase_(config, state, productMap, executionStart, ss) {
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const sheet = getOrCreateSheet(ss, SHOPIFY_PRODUCT_DATA_SHEET_NAME);
+  
+  if (state.writeStartIndex === 0) {
+    sheet.clear();
+    const headers = [
+      "Product ID", "Parent ID", "Variant ID", "Product Name", "Variant Title", "Product Price", "Date Created",
+      "Total Orders", "Total Items Sold", "Total Revenue", "Revenue last 14 days", "Stock Status", "Stock Quantity"
+    ];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold").setHorizontalAlignment("center");
+  }
+
+  const rows = Object.values(productMap).map(p => [
+    p.formattedId, p.productId, p.variantId, p.productName, p.variantTitle, p.price, p.dateCreated,
+    p.uniqueOrders, p.sold, p.rev, p.rev14,
+    p.stockStatus, p.stockQuantity
+  ]).sort((a,b) => b[9] - a[9]); // Sort by Rev
+
+  if (rows.length > 0) {
+      const CHUNK_SIZE = 2000;
+      let doneWriting = true;
+
+      for (let i = state.writeStartIndex; i < rows.length; i += CHUNK_SIZE) {
+        if (isShopifyTimeUp_(executionStart)) {
+          logShopifyStatus_("PAUSED", `Writing paused at row ${i}...`);
+          state.writeStartIndex = i;
+          doneWriting = false;
+          break;
+        }
+        const chunk = rows.slice(i, i + CHUNK_SIZE);
+        sheet.getRange(2 + i, 1, chunk.length, 13).setValues(chunk);
+        SpreadsheetApp.flush();
+        logShopifyStatus_("WRITING", `Writing rows ${i} - ${i+chunk.length}...`);
+      }
+
+      if (doneWriting) {
+         // Formatting
+         sheet.getRange(2, 6, rows.length, 1).setNumberFormat('#,##0.00'); // Price
+         sheet.getRange(2, 10, rows.length, 2).setNumberFormat('#,##0.00'); // Revenues
+      }
+
+      if (!doneWriting) {
+         saveShopifyDataToDrive_(productMap);
+         scriptProperties.setProperty('SHOPIFY_BATCH_STATE', JSON.stringify(state));
+         return; // Exit and wait for next tick
+      }
+  }
+
+  // --- ACCOUNT DATA LOGGING ---
+  // Stats for OOS
+  let oosWithSalesCount = 0;
+  let totalWithSalesCount = 0;
+  Object.values(productMap).forEach(p => {
+     if (p.rev > 0) {
+       totalWithSalesCount++;
+       if (p.stockStatus !== "in stock") oosWithSalesCount++;
+     }
+  });
+  const oosPercent = totalWithSalesCount > 0 
+    ? ((oosWithSalesCount / totalWithSalesCount) * 100).toFixed(1) + "%" 
+    : "0%";
+
+  upsertOverviewRow(ss, SHOPIFY_ACCOUNT_SHEET_NAME, {
+    source: `Shopify - ${config.domain}`,
+    timeframe: formatDisplayDateRange(config.days),
+    revenue: state.totalRevenue,
+    orders: state.uniqueOrdersCount,
+    cost: "-",
+    oosCount: oosWithSalesCount,
+    oosPercent: oosPercent
+  });
+
+  logShopifyStatus_("COMPLETED", "Finished successfully.");
+  resetShopifyScript_();
+  scriptProperties.setProperty('SHOPIFY_WORKER_STATUS', 'IDLE');
+  
+  // Daisy-chain: Run Label Calculations immediately after data is ready
+  try {
+    Logger.log("Triggering Label Calculations...");
+    runAllLabelCalculations(); 
+  } catch (e) {
+    console.error("Failed to trigger labels: " + e.message);
   }
 }
 

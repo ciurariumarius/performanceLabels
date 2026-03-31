@@ -1,72 +1,67 @@
-<!-- 
-PERFORMANCE LABELS DOCUMENTATION
-================================
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <base target="_top">
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 13px; padding: 16px; line-height: 1.6; color: #202124; }
+    h1 { font-size: 15px; color: #1a73e8; margin-bottom: 4px; }
+    .subtitle { font-size: 11px; color: #80868b; margin-bottom: 16px; }
+    h2 { font-size: 13px; font-weight: 600; color: #3c4043; margin: 16px 0 4px; border-bottom: 1px solid #e8eaed; padding-bottom: 3px; }
+    ul { padding-left: 18px; margin: 4px 0; }
+    li { margin-bottom: 3px; }
+    code { background: #f1f3f4; padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+    .note { background: #e8f0fe; border-left: 3px solid #1a73e8; padding: 8px 12px; border-radius: 0 4px 4px 0; margin: 12px 0; font-size: 12px; }
+    .warn { background: #fce8e6; border-left: 3px solid #d93025; padding: 8px 12px; border-radius: 0 4px 4px 0; margin: 12px 0; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>⚡ Performance Labels</h1>
+  <div class="subtitle">Automated Product Segmentation for Google Merchant Center &amp; Meta</div>
 
-Automated Product Segmentation System v3.0
-------------------------------------------
-This tool automatically labels your products for Google Merchant Center.
+  <h2>1. First-Time Setup</h2>
+  <ul>
+    <li>Set your platform in <code>Config.gs</code>: <code>PLATFORM = 'woocommerce'</code> or <code>'shopify'</code></li>
+    <li>Go to <b>⚙️ Settings → 🔑 Update Settings</b> to enter your domain &amp; API credentials</li>
+    <li>Click <b>🕐 Set Up Daily Auto-Fetch</b> to enable automatic daily sync</li>
+  </ul>
 
-*** START HERE ***
-To see the "Performance Labels" menu:
-1. Refresh this Spreadsheet page.
-2. Wait a few seconds for the menu to appear in the top bar.
-3. Use the menu to "Show Documentation" or run tools.
-******************
+  <h2>2. Configuration</h2>
+  <ul>
+    <li>All thresholds are in <code>Config.gs</code> (ROAS, revenue, clicks, price intervals…)</li>
+    <li>Map labels to <code>custom_label_0</code>–<code>custom_label_4</code> in <code>FEED_EXPORT_MAPPING</code></li>
+    <li>Set a mapping to <code>""</code> to disable that label calculation entirely</li>
+  </ul>
 
+  <h2>3. Running Manually</h2>
+  <ul>
+    <li><b>▶️ Run All</b> — fetches store data &amp; recalculates all labels in one click</li>
+    <li><b>Fetch [Platform] Data</b> — syncs data only, no label recalculation</li>
+  </ul>
 
-1. CONFIGURATION
-----------------
-All business rules and label mappings are controlled directly in the 'Config.gs' script file. Features include:
-- Changing thresholds (e.g., ROAS_GOOD, HIGH_REVENUE_THRESHOLD).
-- Mapping internal metrics to Custom Labels for Merchant Center export (e.g. "custom_label_0").
-- Disabling specific labels by setting their mapping to an empty string ("").
+  <h2>4. Google Ads Setup</h2>
+  <ul>
+    <li>Open <code>GoogleAdsData.gs</code> from the GitHub repo</li>
+    <li>Go to <b>Google Ads → Tools → Scripts</b> and paste the code</li>
+    <li>Set the <code>SPREADSHEET_URL</code> variable to your spreadsheet URL</li>
+    <li>Schedule it daily at 4:00 AM (before the 5:00 AM store fetch)</li>
+  </ul>
+  <div class="warn">⚠️ Do <b>not</b> paste <code>GoogleAdsData.gs</code> into this Script Editor — it belongs in Google Ads Scripts only.</div>
 
-2. SECURE API SETTINGS
-----------------------
-API Keys and Webstore Domains are NO LONGER stored in code.
-To set up your stores:
-1. Use the menu: "Performance Labels" -> "🔧 Setup & Fetch".
-2. Click "🔑 Set Store Settings (Secure)".
-3. Enter your platform (WooCommerce/Shopify), Domain, and API credentials.
-These are securely saved to your Google Account's Script Properties.
+  <h2>5. Publishing the Feed (Google Merchant Center)</h2>
+  <ul>
+    <li>In your Spreadsheet: <b>File → Share → Publish to web</b></li>
+    <li>Select the <code>GMC_Feed</code> tab → format: <b>Comma-separated values (.csv)</b> → Publish</li>
+    <li>Paste the generated URL into Google Merchant Center as your scheduled fetch URL</li>
+  </ul>
 
+  <h2>6. Facebook / Meta Feed</h2>
+  <ul>
+    <li>A second tab <code>GMC_Feed_2</code> is auto-generated when <code>ID_PREFIX</code> or <code>ID_SUFFIX</code> is set in <code>Config.gs</code></li>
+    <li>Example: <code>ID_PREFIX = "wc_post_id_"</code> produces IDs like <code>wc_post_id_12345</code></li>
+    <li>Publish <code>GMC_Feed_2</code> as CSV and use that URL in Meta Commerce Manager</li>
+  </ul>
 
-3. GOOGLE ADS SETUP
--------------------
-To get ROAS and Clicks data:
-1. Open 'GoogleAdsData.gs' in this editor.
-2. Copy the entire code.
-3. Go to Google Ads > Tools > Scripts.
-4. Paste the code and set the 'SPREADSHEET_URL' variable.
-5. Schedule it Daily (e.g., 4:00 AM).
-
-
-4. AUTOMATION SETUP
--------------------
-To enable the daily schedule:
-1. Open 'TriggerSetup.gs' in this editor.
-2. Run 'setupShopifyComplete' (or 'setupWooCommerceComplete').
-* This schedules fetching for 5:00 AM daily.
-
-
-5. MANUAL USAGE
----------------
-Use the "Performance Labels" menu in the spreadsheet toolbar to:
-- Fetch Data: Pull fresh data immediately.
-- Update All Labels: Re-calculate labels on existing data.
-
-
-6. PUBLISHING THE FEED URL (FOR GOOGLE MERCHANT CENTER)
--------------------------------------------------------
-The calculated labels are written to the "GMC_Feed" tab in this Spreadsheet.
-To generate a live CSV feed link:
-
-1. In your Google Spreadsheet, click File > Share > Publish to web.
-2. Change "Entire Document" to "GMC_Feed".
-3. Change "Web page" to "Comma-separated values (.csv)".
-4. Click Publish and copy the generated URL.
-
-For Facebook/Meta Ads, use the "GMC_Feed_2" tab instead.
-Its IDs are automatically prefixed/suffixed based on ID_PREFIX and ID_SUFFIX settings in Config.gs.
-Example: set ID_PREFIX = "wc_post_id_" to produce IDs like "wc_post_id_12345".
--->
+  <div class="note">💡 <b>API Keys</b> are stored securely in Google Script Properties — never in the code or spreadsheet.</div>
+</body>
+</html>

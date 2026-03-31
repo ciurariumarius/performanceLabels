@@ -15,7 +15,7 @@
 // --- Script-level Constants (with unique names) ---
 const GA4_CONFIG_SHEET_NAME = 'Config';
 const GA4_ANALYTICS_SHEET_NAME = 'Analytics';
-const GA4_ACCOUNT_DATA_SHEET_NAME = 'AccountData';
+const GA4_ACCOUNT_DATA_SHEET_NAME = 'Overview';
 
 // --- GA4 Report Configuration ---
 const GA4_API_LIMIT = 25000; // Max rows to request per API call
@@ -207,8 +207,8 @@ function writeResultsToSheets_GA4_(spreadsheet, mainReportResults, accountSummar
     analyticsSheet.getRange(2, 7, mainReportResults.analyticsSheetRows.length, 2).setNumberFormat("#,##0.00"); // Revenues
   }
 
-  // --- Write to AccountData Sheet ---
-  upsertAccountDataRow(spreadsheet, GA4_ACCOUNT_DATA_SHEET_NAME, {
+  // --- Write to Overview Sheet ---
+  upsertOverviewRow(spreadsheet, GA4_ACCOUNT_DATA_SHEET_NAME, {
     source: `GA4 - ${propertyId}`,
     timeframe: displayTimeframe,
     revenue: mainReportResults.totals.totalRevenue,
