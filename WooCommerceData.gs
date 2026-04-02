@@ -444,7 +444,7 @@ function loadDataFromDrive_() {
  * Loads configuration from the Config sheet using CommonUtilities.
  */
 function loadWooConfig_(ss) {
-  const days = AppConfig.TimeframeDays;
+  const days = getAppConfig().TimeframeDays;
   
   const props = PropertiesService.getScriptProperties();
   const rawUrl = props.getProperty('WOOCOMMERCE_DOMAIN');

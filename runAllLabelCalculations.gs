@@ -131,8 +131,9 @@ function consolidateMetrics(ss) {
     
     // --- Initialize GMC_Feed_2 (secondary: ID-modified, only created if prefix/suffix is configured) ---
     // Note: Initialization of the primary feed is skipped here since we do it as one batch write later.
-    const prefix = AppConfig.IdPrefix || "";
-    const suffix = AppConfig.IdSuffix || "";
+    const config = getAppConfig();
+    const prefix = config.IdPrefix || "";
+    const suffix = config.IdSuffix || "";
     if (prefix || suffix) {
       const labelsSheet2 = getOrCreateSheet(ss, LABELS_SHEET_2_NAME);
       labelsSheet2.clear();

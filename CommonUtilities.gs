@@ -7,6 +7,98 @@
 
 
 // =========================================================================================
+// --- Default configuration (Fallbacks for script duplication) ---
+// =========================================================================================
+const DEFAULT_LABEL_CONFIG = {
+  Platform: 'woocommerce',
+  TimeframeDays: 30,
+  NewProductDays: 30,
+  IdPrefix: "",
+  IdSuffix: "",
+  Shopify: {
+    ProductIdFormat: 'shopify',
+    CountryCode: 'zz'
+  },
+  ROAS: { Good: 5, Bad: 3 },
+  ConversionRate: { Good: 4, Bad: 0.5 },
+  Clicks: { High: 50, Low: 30 },
+  Revenue: { LowThresholdPercent: 50, HighThresholdPercent: 150 },
+  Orders: { Threshold: 5 },
+  PriceIntervalStep: 50,
+  
+  LabelsMapping: {
+    LABEL_GADS_ROAS:          "custom_label_2",
+    LABEL_GADS_CONV_RATE:     "custom_label_3",
+    LABEL_GADS_CLICKS:        "custom_label_4",
+    LABEL_REVENUE_SIMPLE:     "custom_label_0",
+    LABEL_REVENUE_ADVANCED:   "",
+    LABEL_PRICE_INTERVAL:     "custom_label_1",
+    LABEL_PERFORMANCE_INDEX:  "",
+    LABEL_AVAILABLE_VARIANTS: "",
+    LABEL_ORDERS:             "",
+    LABEL_TREND:              "",
+    LABEL_NEW:                ""
+  }
+};
+
+/**
+ * Dynamically builds the AppConfig structure using PropertiesService, falling back to DEFAULT_LABEL_CONFIG.
+ */
+function getAppConfig() {
+  const props = PropertiesService.getScriptProperties();
+  
+  function getProp(key, def) {
+    const val = props.getProperty(key);
+    return val !== null ? val : def;
+  }
+
+  return {
+    Platform: getProp('PLATFORM', DEFAULT_LABEL_CONFIG.Platform),
+    TimeframeDays: parseIntSafe(getProp('CFG_TIMEFRAME_DAYS', DEFAULT_LABEL_CONFIG.TimeframeDays), DEFAULT_LABEL_CONFIG.TimeframeDays),
+    NewProductDays: parseIntSafe(getProp('CFG_NEW_PRODUCT_DAYS', DEFAULT_LABEL_CONFIG.NewProductDays), DEFAULT_LABEL_CONFIG.NewProductDays),
+    IdPrefix: getProp('CFG_ID_PREFIX', DEFAULT_LABEL_CONFIG.IdPrefix),
+    IdSuffix: getProp('CFG_ID_SUFFIX', DEFAULT_LABEL_CONFIG.IdSuffix),
+    Shopify: {
+      ProductIdFormat: getProp('CFG_SHOPIFY_FORMAT', DEFAULT_LABEL_CONFIG.Shopify.ProductIdFormat),
+      CountryCode: getProp('CFG_COUNTRY_CODE', DEFAULT_LABEL_CONFIG.Shopify.CountryCode)
+    },
+    ROAS: {
+      Good: parseFloatSafe(getProp('CFG_ROAS_GOOD', DEFAULT_LABEL_CONFIG.ROAS.Good), 5),
+      Bad: parseFloatSafe(getProp('CFG_ROAS_BAD', DEFAULT_LABEL_CONFIG.ROAS.Bad), 3)
+    },
+    ConversionRate: {
+      Good: parseFloatSafe(getProp('CFG_CVR_GOOD', DEFAULT_LABEL_CONFIG.ConversionRate.Good), 4),
+      Bad: parseFloatSafe(getProp('CFG_CVR_BAD', DEFAULT_LABEL_CONFIG.ConversionRate.Bad), 0.5)
+    },
+    Clicks: {
+      High: parseIntSafe(getProp('CFG_CLICKS_HIGH', DEFAULT_LABEL_CONFIG.Clicks.High), 50),
+      Low: parseIntSafe(getProp('CFG_CLICKS_LOW', DEFAULT_LABEL_CONFIG.Clicks.Low), 30)
+    },
+    Revenue: {
+      LowThresholdPercent: parseFloatSafe(getProp('CFG_REV_LOW', DEFAULT_LABEL_CONFIG.Revenue.LowThresholdPercent), 50),
+      HighThresholdPercent: parseFloatSafe(getProp('CFG_REV_HIGH', DEFAULT_LABEL_CONFIG.Revenue.HighThresholdPercent), 150)
+    },
+    Orders: {
+      Threshold: parseIntSafe(getProp('CFG_MIN_ORDERS', DEFAULT_LABEL_CONFIG.Orders.Threshold), 5)
+    },
+    PriceIntervalStep: parseFloatSafe(getProp('CFG_PRICE_STEP', DEFAULT_LABEL_CONFIG.PriceIntervalStep), 50),
+    LabelsMapping: {
+      LABEL_GADS_ROAS:          getProp('CFG_OUT_ROAS', DEFAULT_LABEL_CONFIG.LabelsMapping.LABEL_GADS_ROAS),
+      LABEL_GADS_CONV_RATE:     getProp('CFG_OUT_CVR', DEFAULT_LABEL_CONFIG.LabelsMapping.LABEL_GADS_CONV_RATE),
+      LABEL_GADS_CLICKS:        getProp('CFG_OUT_CLICKS', DEFAULT_LABEL_CONFIG.LabelsMapping.LABEL_GADS_CLICKS),
+      LABEL_REVENUE_SIMPLE:     getProp('CFG_OUT_REV_SIMPLE', DEFAULT_LABEL_CONFIG.LabelsMapping.LABEL_REVENUE_SIMPLE),
+      LABEL_REVENUE_ADVANCED:   getProp('CFG_OUT_REV_ADV', DEFAULT_LABEL_CONFIG.LabelsMapping.LABEL_REVENUE_ADVANCED),
+      LABEL_PRICE_INTERVAL:     getProp('CFG_OUT_PRICE', DEFAULT_LABEL_CONFIG.LabelsMapping.LABEL_PRICE_INTERVAL),
+      LABEL_PERFORMANCE_INDEX:  getProp('CFG_OUT_PERF', DEFAULT_LABEL_CONFIG.LabelsMapping.LABEL_PERFORMANCE_INDEX),
+      LABEL_AVAILABLE_VARIANTS: getProp('CFG_OUT_VARIANTS', DEFAULT_LABEL_CONFIG.LabelsMapping.LABEL_AVAILABLE_VARIANTS),
+      LABEL_ORDERS:             getProp('CFG_OUT_ORDERS', DEFAULT_LABEL_CONFIG.LabelsMapping.LABEL_ORDERS),
+      LABEL_TREND:              getProp('CFG_OUT_TREND', DEFAULT_LABEL_CONFIG.LabelsMapping.LABEL_TREND),
+      LABEL_NEW:                getProp('CFG_OUT_NEW', DEFAULT_LABEL_CONFIG.LabelsMapping.LABEL_NEW)
+    }
+  };
+}
+
+// =========================================================================================
 // --- Configuration Loading Helper Functions ---
 // =========================================================================================
 
@@ -17,37 +109,36 @@
  * @param {GoogleAppsScript.Spreadsheet.Sheet} configSheet The sheet object to read from.
  * @return {object} An object where keys are labels from Col A and values are from Col B. Returns empty object on error.
  */
-function loadConfigurationsFromSheetObject(configSheet) {
-  // We no longer read from the sheet. We return a mapping from the centralized AppConfig
-  // so that all existing scripts (calculating labels) don't need to be rewritten.
-  Logger.log("Loading configurations from Config.gs...");
+function loadConfigurationsFromSheetObject() {
+  Logger.log("Loading AppConfig mapped structure...");
+  const config = getAppConfig();
   
   return {
-    "ROAS Good": AppConfig.ROAS.Good,
-    "ROAS Bad": AppConfig.ROAS.Bad,
-    "Conversion Rate Good": AppConfig.ConversionRate.Good,
-    "Conversion Rate Bad": AppConfig.ConversionRate.Bad,
-    "Clicks High": AppConfig.Clicks.High,
-    "Clicks Low": AppConfig.Clicks.Low,
-    "Low Revenue Threshold": AppConfig.Revenue.LowThresholdPercent,
-    "High Revenue Threshold": AppConfig.Revenue.HighThresholdPercent,
-    "Price Interval Step": AppConfig.PriceIntervalStep,
-    "Nr. of Orders Threshold": AppConfig.Orders.Threshold,
-    "New Product Days": AppConfig.NewProductDays,
-    "Timeframe": AppConfig.TimeframeDays,
+    "ROAS Good": config.ROAS.Good,
+    "ROAS Bad": config.ROAS.Bad,
+    "Conversion Rate Good": config.ConversionRate.Good,
+    "Conversion Rate Bad": config.ConversionRate.Bad,
+    "Clicks High": config.Clicks.High,
+    "Clicks Low": config.Clicks.Low,
+    "Low Revenue Threshold": config.Revenue.LowThresholdPercent,
+    "High Revenue Threshold": config.Revenue.HighThresholdPercent,
+    "Price Interval Step": config.PriceIntervalStep,
+    "Nr. of Orders Threshold": config.Orders.Threshold,
+    "New Product Days": config.NewProductDays,
+    "Timeframe": config.TimeframeDays,
     
     // Label Mappings
-    "LABEL_GADS_ROAS": AppConfig.LabelsMapping.LABEL_GADS_ROAS,
-    "LABEL_GADS_CONV_RATE": AppConfig.LabelsMapping.LABEL_GADS_CONV_RATE,
-    "LABEL_GADS_CLICKS": AppConfig.LabelsMapping.LABEL_GADS_CLICKS,
-    "LABEL_REVENUE_SIMPLE": AppConfig.LabelsMapping.LABEL_REVENUE_SIMPLE,
-    "LABEL_REVENUE_ADVANCED": AppConfig.LabelsMapping.LABEL_REVENUE_ADVANCED,
-    "LABEL_PRICE_INTERVAL": AppConfig.LabelsMapping.LABEL_PRICE_INTERVAL,
-    "LABEL_PERFORMANCE_INDEX": AppConfig.LabelsMapping.LABEL_PERFORMANCE_INDEX,
-    "LABEL_AVAILABLE_VARIANTS": AppConfig.LabelsMapping.LABEL_AVAILABLE_VARIANTS,
-    "LABEL_ORDERS": AppConfig.LabelsMapping.LABEL_ORDERS,
-    "LABEL_TREND": AppConfig.LabelsMapping.LABEL_TREND,
-    "LABEL_NEW": AppConfig.LabelsMapping.LABEL_NEW
+    "LABEL_GADS_ROAS": config.LabelsMapping.LABEL_GADS_ROAS,
+    "LABEL_GADS_CONV_RATE": config.LabelsMapping.LABEL_GADS_CONV_RATE,
+    "LABEL_GADS_CLICKS": config.LabelsMapping.LABEL_GADS_CLICKS,
+    "LABEL_REVENUE_SIMPLE": config.LabelsMapping.LABEL_REVENUE_SIMPLE,
+    "LABEL_REVENUE_ADVANCED": config.LabelsMapping.LABEL_REVENUE_ADVANCED,
+    "LABEL_PRICE_INTERVAL": config.LabelsMapping.LABEL_PRICE_INTERVAL,
+    "LABEL_PERFORMANCE_INDEX": config.LabelsMapping.LABEL_PERFORMANCE_INDEX,
+    "LABEL_AVAILABLE_VARIANTS": config.LabelsMapping.LABEL_AVAILABLE_VARIANTS,
+    "LABEL_ORDERS": config.LabelsMapping.LABEL_ORDERS,
+    "LABEL_TREND": config.LabelsMapping.LABEL_TREND,
+    "LABEL_NEW": config.LabelsMapping.LABEL_NEW
   };
 }
 

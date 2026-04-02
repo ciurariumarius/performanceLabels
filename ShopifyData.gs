@@ -473,7 +473,8 @@ function determineShopifyStockStatus_(variant) {
  * Use when loadConfigurationsFromSheetObject only reads a fixed range and misses new rows.
  */
 function loadShopifyConfig_(ss) {
-  const days = AppConfig.TimeframeDays;
+  const config = getAppConfig();
+  const days = config.TimeframeDays;
 
   const props = PropertiesService.getScriptProperties();
   const domain = props.getProperty('SHOPIFY_DOMAIN');
@@ -490,8 +491,8 @@ function loadShopifyConfig_(ss) {
     clientId, 
     clientSecret, 
     days, 
-    countryCode: AppConfig.Shopify.CountryCode,
-    idFormat: AppConfig.Shopify.ProductIdFormat
+    countryCode: config.Shopify.CountryCode,
+    idFormat: config.Shopify.ProductIdFormat
   };
 }
 

@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <base target="_top">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Google Sans', Arial, sans-serif; font-size: 13px; color: #202124; background: #f8f9fa; }
+    .header { background: #fff; padding: 16px 20px; border-bottom: 1px solid #dadce0; display: flex; align-items: center; position: sticky; top: 0; z-index: 10; }
+    h2 { font-size: 16px; font-weight: 500; color: #1a73e8; margin: 0; flex: 1; }
+    .content { padding: 20px; overflow-y: auto; height: calc(100vh - 120px); }
+    
+    .panel { background: #fff; border: 1px solid #dadce0; border-radius: 8px; padding: 16px; margin-bottom: 20px; box-shadow: 0 1px 2px rgba(60,64,67,0.1); }
+    .panel-title { font-size: 14px; font-weight: 600; color: #202124; margin-bottom: 12px; border-bottom: 1px solid #f1f3f4; padding-bottom: 8px; }
+    
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; }
+    .full-width { grid-column: 1 / -1; }
+    
+    label { display: block; font-weight: 500; margin-bottom: 4px; color: #3c4043; font-size: 12px; }
+    .hint { font-size: 11px; color: #80868b; margin-top: 3px; }
+    
+    input[type="text"], input[type="number"], select {
+      width: 100%; padding: 8px 10px; border: 1px solid #dadce0;
+      border-radius: 4px; font-size: 13px; color: #202124;
+      transition: border-color .15s;
+    }
+    input:focus, select:focus { outline: none; border-color: #1a73e8; }
+    input:disabled { background: #f1f3f4; color: #80868b; }
+
+    .footer { position: sticky; bottom: 0; background: #fff; padding: 16px 20px; border-top: 1px solid #dadce0; display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
+    
+    .btn { padding: 8px 18px; border-radius: 4px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; }
+    .btn-primary { background: #1a73e8; color: #fff; box-shadow: 0 1px 2px rgba(60,64,67,0.3); }
+    .btn-primary:hover { background: #1765cc; box-shadow: 0 1px 3px rgba(60,64,67,0.3); }
+    .btn-secondary { background: #fff; color: #1a73e8; border: 1px solid #dadce0; }
+    .btn-secondary:hover { background: #f1f3f4; }
+    
+    #status { font-size: 13px; font-weight: 500; color: #188038; display: none; margin-right: auto; }
+    #error { font-size: 13px; font-weight: 500; color: #c5221f; display: none; margin-right: auto; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>📊 Label & Threshold Settings</h2>
+  </div>
+
+  <div class="content">
+    <div class="panel">
+      <div class="panel-title">⏱️ Timeframes</div>
+      <div class="grid">
+        <div>
+          <label>Analysis Timeframe (Days)</label>
+          <input type="number" id="timeframeDays" min="1">
+          <div class="hint">How many days back to analyze.</div>
+        </div>
+        <div>
+          <label>New Product Window (Days)</label>
+          <input type="number" id="newProductDays" min="1">
+          <div class="hint">Defines "new" vs old products.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">🎯 Google Ads Thresholds</div>
+      <div class="grid">
+        <div>
+          <label>Good ROAS (≥)</label>
+          <input type="number" id="roasGood" step="0.1">
+        </div>
+        <div>
+          <label>Bad ROAS (<)</label>
+          <input type="number" id="roasBad" step="0.1">
+        </div>
+        <div>
+          <label>Good Conv. Rate (%) (≥)</label>
+          <input type="number" id="cvrGood" step="0.1">
+        </div>
+        <div>
+          <label>Bad Conv. Rate (%) (<)</label>
+          <input type="number" id="cvrBad" step="0.1">
+        </div>
+        <div>
+          <label>High Clicks (≥)</label>
+          <input type="number" id="clicksHigh">
+        </div>
+        <div>
+          <label>Low Clicks (<)</label>
+          <input type="number" id="clicksLow">
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">💰 Store Revenue & Sales</div>
+      <div class="grid">
+        <div>
+          <label>High Revenue (%) (≥)</label>
+          <input type="number" id="revHigh">
+          <div class="hint">% of account average.</div>
+        </div>
+        <div>
+          <label>Low Revenue (%) (<)</label>
+          <input type="number" id="revLow">
+        </div>
+        <div>
+          <label>High Orders Threshold</label>
+          <input type="number" id="minOrders">
+        </div>
+        <div>
+          <label>Price Grouping Interval</label>
+          <input type="number" id="priceStep" step="1">
+          <div class="hint">E.g., 50 chunks into 0-50, 50-100.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">🔑 ID Formatting Defaults</div>
+      <div class="grid">
+        <div>
+          <label>Shopify Format Type</label>
+          <select id="shopifyFormat">
+            <option value="shopify">shopify (Standard)</option>
+            <option value="variant_id">variant_id (Only)</option>
+            <option value="parent_id">parent_id (Only)</option>
+          </select>
+        </div>
+        <div>
+          <label>Shopify Country Code</label>
+          <input type="text" id="countryCode" placeholder="e.g. zz, us, de">
+        </div>
+        <div class="full-width hint" style="margin-top: -8px; border-bottom: 1px solid #f1f3f4; padding-bottom: 10px; margin-bottom: 4px;">
+          Note: If standard format is selected, ID generated is `shopify_{COUNTRY}_{productId}_{variantId}`
+        </div>
+        <div>
+          <label>GMC_Feed_2 Prefix</label>
+          <input type="text" id="idPrefix" placeholder="Optional">
+        </div>
+        <div>
+          <label>GMC_Feed_2 Suffix</label>
+          <input type="text" id="idSuffix" placeholder="Optional">
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">🏷️ Label Output Mappings</div>
+      <div class="grid">
+        <div class="full-width hint" style="margin-bottom: 8px; margin-top: -6px;">
+          Define where resulting metrics sit. Map to `custom_label_0` thru `4`. Leave blank to disable export.
+        </div>
+        <div><label>GAds ROAS</label><input type="text" id="outGAdsRoas"></div>
+        <div><label>GAds Conv. Rate</label><input type="text" id="outGAdsCvr"></div>
+        <div><label>GAds Clicks</label><input type="text" id="outGAdsClicks"></div>
+        
+        <div><label>Rev. Has/No</label><input type="text" id="outRevSimple"></div>
+        <div><label>Rev. High/Low</label><input type="text" id="outRevAdvanced"></div>
+        
+        <div><label>Orders Rate</label><input type="text" id="outOrders"></div>
+        <div><label>Price Intervals</label><input type="text" id="outPriceInterval"></div>
+        
+        <div><label>Variant Status</label><input type="text" id="outVariants"></div>
+        <div><label>Sales Trend</label><input type="text" id="outTrend"></div>
+        
+        <div><label>New Product Tag</label><input type="text" id="outNewProduct"></div>
+        <div><label>Performance Index</label><input type="text" id="outPerfIndex"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div id="status">✅ Saved successfully!</div>
+    <div id="error"></div>
+    <button class="btn btn-secondary" onclick="google.script.host.close()">Cancel</button>
+    <button class="btn btn-primary" onclick="saveData()">Save Changes</button>
+  </div>
+
+  <script>
+    google.script.run
+      .withSuccessHandler(function(data) {
+        document.getElementById('timeframeDays').value = data.timeframeDays;
+        document.getElementById('newProductDays').value = data.newProductDays;
+        document.getElementById('roasGood').value = data.roasGood;
+        document.getElementById('roasBad').value = data.roasBad;
+        document.getElementById('cvrGood').value = data.cvrGood;
+        document.getElementById('cvrBad').value = data.cvrBad;
+        document.getElementById('clicksHigh').value = data.clicksHigh;
+        document.getElementById('clicksLow').value = data.clicksLow;
+        document.getElementById('revHigh').value = data.revHigh;
+        document.getElementById('revLow').value = data.revLow;
+        document.getElementById('minOrders').value = data.minOrders;
+        document.getElementById('priceStep').value = data.priceStep;
+        
+        document.getElementById('shopifyFormat').value = data.shopifyFormat;
+        document.getElementById('countryCode').value = data.countryCode;
+        document.getElementById('idPrefix').value = data.idPrefix;
+        document.getElementById('idSuffix').value = data.idSuffix;
+        
+        document.getElementById('outGAdsRoas').value = data.outGAdsRoas;
+        document.getElementById('outGAdsCvr').value = data.outGAdsCvr;
+        document.getElementById('outGAdsClicks').value = data.outGAdsClicks;
+        document.getElementById('outRevSimple').value = data.outRevSimple;
+        document.getElementById('outRevAdvanced').value = data.outRevAdvanced;
+        document.getElementById('outPriceInterval').value = data.outPriceInterval;
+        document.getElementById('outOrders').value = data.outOrders;
+        document.getElementById('outVariants').value = data.outVariants;
+        document.getElementById('outTrend').value = data.outTrend;
+        document.getElementById('outNewProduct').value = data.outNewProduct;
+        document.getElementById('outPerfIndex').value = data.outPerfIndex;
+      })
+      .getLabelSettingsForDialog();
+
+    function saveData() {
+      const payload = {
+        timeframeDays: document.getElementById('timeframeDays').value,
+        newProductDays: document.getElementById('newProductDays').value,
+        roasGood: document.getElementById('roasGood').value,
+        roasBad: document.getElementById('roasBad').value,
+        cvrGood: document.getElementById('cvrGood').value,
+        cvrBad: document.getElementById('cvrBad').value,
+        clicksHigh: document.getElementById('clicksHigh').value,
+        clicksLow: document.getElementById('clicksLow').value,
+        revHigh: document.getElementById('revHigh').value,
+        revLow: document.getElementById('revLow').value,
+        minOrders: document.getElementById('minOrders').value,
+        priceStep: document.getElementById('priceStep').value,
+        
+        shopifyFormat: document.getElementById('shopifyFormat').value,
+        countryCode: document.getElementById('countryCode').value,
+        idPrefix: document.getElementById('idPrefix').value,
+        idSuffix: document.getElementById('idSuffix').value,
+
+        outGAdsRoas: document.getElementById('outGAdsRoas').value,
+        outGAdsCvr: document.getElementById('outGAdsCvr').value,
+        outGAdsClicks: document.getElementById('outGAdsClicks').value,
+        outRevSimple: document.getElementById('outRevSimple').value,
+        outRevAdvanced: document.getElementById('outRevAdvanced').value,
+        outPriceInterval: document.getElementById('outPriceInterval').value,
+        outOrders: document.getElementById('outOrders').value,
+        outVariants: document.getElementById('outVariants').value,
+        outTrend: document.getElementById('outTrend').value,
+        outNewProduct: document.getElementById('outNewProduct').value,
+        outPerfIndex: document.getElementById('outPerfIndex').value,
+      };
+
+      document.getElementById('status').style.display = 'none';
+      document.getElementById('error').style.display = 'none';
+
+      google.script.run
+        .withSuccessHandler(function() {
+          document.getElementById('status').style.display = 'inline-block';
+          setTimeout(function() { google.script.host.close(); }, 1200);
+        })
+        .withFailureHandler(function(e) {
+          document.getElementById('error').style.display = 'inline-block';
+          document.getElementById('error').textContent = '❌ ' + e.message;
+        })
+        .saveLabelSettingsFromDialog(payload);
+    }
+  </script>
+</body>
+</html>
