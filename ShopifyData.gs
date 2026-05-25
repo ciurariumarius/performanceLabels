@@ -46,7 +46,7 @@ function startShopifyReport() {
     // Calculate Order timeframe
     const endDate = new Date();
     const startDate = new Date(endDate.getTime() - config.days * 86400000);
-    const ordersUrl = `https://${config.domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json?limit=${SHOPIFY_ITEMS_PER_PAGE}&status=any&created_at_min=${startDate.toISOString()}&fields=id,line_items,created_at,financial_status,cancelled_at`;
+    const ordersUrl = `https://${config.domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json?limit=${SHOPIFY_ITEMS_PER_PAGE}&status=any&financial_status=paid&created_at_min=${startDate.toISOString()}&fields=id,line_items,created_at,financial_status,cancelled_at`;
 
     const startState = {
       phase: 'FETCH_PRODUCTS',
@@ -242,7 +242,7 @@ function executeShopifyFetchOrdersPhase_(config, state, productMap, executionSta
       
       if (data.orders && data.orders.length > 0) {
         data.orders.forEach(order => {
-          if (order.cancelled_at || order.financial_status === 'voided') return;
+          if (order.cancelled_at || order.financial_status !== 'paid') return;
 
           state.uniqueOrdersCount++;
           const orderDate = new Date(order.created_at);
@@ -251,8 +251,9 @@ function executeShopifyFetchOrdersPhase_(config, state, productMap, executionSta
           order.line_items?.forEach(item => {
             const pInfo = productMap[item.variant_id];
             if (pInfo) {
-               const itemRev = parseFloatSafe(item.price, 0.0) * parseIntSafe(item.quantity, 0);
                const itemQty = parseIntSafe(item.quantity, 0);
+               const grossItemRev = parseFloatSafe(item.price, 0.0) * itemQty;
+               const itemRev = Math.max(0, grossItemRev - parseFloatSafe(item.total_discount, 0.0));
                
                pInfo.rev += itemRev;
                pInfo.sold += itemQty;

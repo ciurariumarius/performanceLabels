@@ -39,17 +39,19 @@ function runCustomerReportFromOrders() {
     const lastSyncDate = scriptProperties.getProperty('CUST_LAST_SUCCESSFUL_SYNC');
     
     // --- 1. Load Configuration ---
-    const configSheet = spreadsheet.getSheetByName(CUST_CONFIG_SHEET_NAME);
-    if (!configSheet) {
-      throw new Error(`Configuration sheet "${CUST_CONFIG_SHEET_NAME}" does not exist.`);
-    }
-
     // Use CommonUtilities to load config
-    const SCRIPT_CONFIGS = loadConfigurationsFromSheetObject(configSheet);
+    const configSheet = spreadsheet.getSheetByName(CUST_CONFIG_SHEET_NAME);
+    const SCRIPT_CONFIGS = configSheet ? loadConfigurationsFromSheetObject(configSheet) : {};
+    const props = PropertiesService.getScriptProperties();
     
-    const shopUrl = ensureHttps(getConfigValue(SCRIPT_CONFIGS, "WooCommerce Domain", 'string'));
-    const consumerKey = getConfigValue(SCRIPT_CONFIGS, "WooCommerce API Key", 'string');
-    const consumerSecret = getConfigValue(SCRIPT_CONFIGS, "WooCommerce API Secret", 'string');
+    const shopUrl = ensureHttps(
+      props.getProperty('WOOCOMMERCE_DOMAIN') ||
+      getConfigValue(SCRIPT_CONFIGS, "WooCommerce Domain", 'string')
+    );
+    const consumerKey = props.getProperty('WOOCOMMERCE_API_KEY') ||
+      getConfigValue(SCRIPT_CONFIGS, "WooCommerce API Key", 'string');
+    const consumerSecret = props.getProperty('WOOCOMMERCE_API_SECRET') ||
+      getConfigValue(SCRIPT_CONFIGS, "WooCommerce API Secret", 'string');
     
     if (!shopUrl || !consumerKey || !consumerSecret) {
       throw new Error(`"WooCommerce Domain", "API Key", or "API Secret" missing in '${CUST_CONFIG_SHEET_NAME}'.`);
@@ -269,5 +271,3 @@ function _cust_formatPhoneE164(phone, country) {
   if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
   return `+${dialingCode}${cleanPhone}`;
 }
-
-

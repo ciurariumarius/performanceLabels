@@ -4,6 +4,7 @@ const LABELS_SHEET_2_NAME = "GMC_Feed_2";
 const GADS_SHEET_NAME_SOURCE = "GAds";
 const SHOPIFY_SHEET_NAME_SOURCE = "Shopify";
 const WOOCOMMERCE_SHEET_NAME_SOURCE = "WooCommerce";
+const GOMAG_SHEET_NAME_SOURCE = "Gomag";
 
 const METRICS_HEADERS = [
   "id", "Title", "Date Created", "Price", "Revenue", "Revenue last 14 days", "Orders", "Stock Status", "Stock Qty",
@@ -37,6 +38,9 @@ function runAllLabelCalculations() {
   Logger.log("--- Starting Label Calculations IN-MEMORY ---");
   
   const idIndex = rawHeaders.indexOf("id");
+  if (idIndex === -1) {
+    throw new Error('Required Metrics column "id" was not found. Cannot build feed labels safely.');
+  }
   const allHeaders = ["id"]; 
   const allLabels = rawData.map(row => [row[idIndex]]); // Initialize with IDs
 
@@ -46,9 +50,19 @@ function runAllLabelCalculations() {
       Logger.log(`Skipping output for ${name} due to missing result or error.`);
       return;
     }
-    allHeaders.push(...result.headers);
+    const enabledColumns = result.headers
+      .map((header, index) => ({ header: String(header || "").trim(), index }))
+      .filter(column => column.header !== "");
+
+    if (enabledColumns.length === 0) {
+      Logger.log(`Skipping output for ${name} because all mapped output columns are disabled.`);
+      return;
+    }
+
+    allHeaders.push(...enabledColumns.map(column => column.header));
     for (let i = 0; i < rawData.length; i++) {
-        allLabels[i].push(...(result.labels[i] || []));
+      const rowLabels = result.labels[i] || [];
+      allLabels[i].push(...enabledColumns.map(column => rowLabels[column.index] || ""));
     }
     Logger.log(`Successfully calculated ${name} labels.`);
   };
@@ -83,13 +97,15 @@ function consolidateMetrics(ss) {
   
   const shopifySheet = ss.getSheetByName(SHOPIFY_SHEET_NAME_SOURCE);
   const wooSheet = ss.getSheetByName(WOOCOMMERCE_SHEET_NAME_SOURCE);
+  const gomagSheet = ss.getSheetByName(GOMAG_SHEET_NAME_SOURCE);
   const gadsSheet = ss.getSheetByName(GADS_SHEET_NAME_SOURCE);
   
   const shopifyData = shopifySheet ? getShopifyData_(shopifySheet) : [];
   const wooData = wooSheet ? getWooData_(wooSheet) : [];
+  const gomagData = gomagSheet ? getGomagData_(gomagSheet) : [];
   const gadsMap = gadsSheet ? loadGAdsDataMap_(gadsSheet) : {};
   
-  const sourceData = [...shopifyData, ...wooData];
+  const sourceData = [...shopifyData, ...wooData, ...gomagData].filter(item => item.id);
   
   const combinedData = sourceData.map(item => {
     const safeId = String(item.id).toLowerCase();
@@ -191,6 +207,23 @@ function getShopifyData_(sheet) {
 }
 
 function getWooData_(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const rawData = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+  return rawData.map(row => ({
+    id: row[0],
+    title: row[1],
+    dateCreated: row[4],
+    price: row[3],
+    revenue: row[7],
+    revenue14: row[8],
+    orders: row[5],
+    stockStatus: row[9],
+    stockQty: row[10]
+  }));
+}
+
+function getGomagData_(sheet) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
   const rawData = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();

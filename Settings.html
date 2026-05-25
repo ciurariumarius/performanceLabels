@@ -48,6 +48,7 @@
     <div class="platform-toggle">
       <div class="platform-btn" id="btn-woo" onclick="setPlatform('woocommerce')">🛒 WooCommerce</div>
       <div class="platform-btn" id="btn-shopify" onclick="setPlatform('shopify')">🛍️ Shopify</div>
+      <div class="platform-btn" id="btn-gomag" onclick="setPlatform('gomag')">Gomag</div>
     </div>
   </div>
 
@@ -96,6 +97,32 @@
     </div>
   </div>
 
+  <!-- Gomag Fields -->
+  <div id="section-gomag" class="platform-section">
+    <div class="section">
+      <label>ApiShop</label>
+      <div class="hint">e.g., https://shop.ro or Api_shop_pagina</div>
+      <input type="text" id="gomag-api-shop" placeholder="https://shop.ro">
+    </div>
+    <div class="section">
+      <label>Apikey</label>
+      <input type="password" id="gomag-api-key" placeholder="Leave blank to keep existing">
+    </div>
+    <div class="section">
+      <label>Product ID Mode</label>
+      <select id="gomag-id-mode">
+        <option value="sku">SKU</option>
+        <option value="product_id">Product ID</option>
+        <option value="ean">EAN</option>
+      </select>
+    </div>
+    <div class="section">
+      <label>Order Status IDs</label>
+      <div class="hint">Comma-separated Gomag status IDs to count in revenue/orders.</div>
+      <input type="text" id="gomag-status-ids" placeholder="721,722">
+    </div>
+  </div>
+
   <div id="status">✅ Settings saved!</div>
   <div id="error"></div>
 
@@ -117,12 +144,16 @@
         document.getElementById('shopify-domain').value = data.shopifyDomain || '';
         document.getElementById('shopify-id').value     = data.shopifyId     || '';
         document.getElementById('shopify-secret').value = data.shopifySecret || '';
+        document.getElementById('gomag-api-shop').value = data.gomagApiShop || '';
+        document.getElementById('gomag-api-key').value  = data.gomagApiKey  || '';
+        document.getElementById('gomag-id-mode').value  = data.gomagIdMode  || 'sku';
+        document.getElementById('gomag-status-ids').value = data.gomagStatusIds || '';
         document.getElementById('ga4-property-id').value = data.ga4PropertyId || '';
       })
       .getCurrentSettingsForDialog();
 
     // Clear masked value on focus so user can type a new one
-    ['woo-key','woo-secret','shopify-id','shopify-secret'].forEach(function(id) {
+    ['woo-key','woo-secret','shopify-id','shopify-secret','gomag-api-key'].forEach(function(id) {
       var el = document.getElementById(id);
       el.addEventListener('focus', function() {
         if (this.value.startsWith('\u2022')) this.value = '';
@@ -133,8 +164,10 @@
       currentPlatform = p;
       document.getElementById('btn-woo').classList.toggle('active', p === 'woocommerce');
       document.getElementById('btn-shopify').classList.toggle('active', p === 'shopify');
+      document.getElementById('btn-gomag').classList.toggle('active', p === 'gomag');
       document.getElementById('section-woocommerce').classList.toggle('visible', p === 'woocommerce');
       document.getElementById('section-shopify').classList.toggle('visible', p === 'shopify');
+      document.getElementById('section-gomag').classList.toggle('visible', p === 'gomag');
     }
 
     function saveSettings() {
@@ -152,6 +185,10 @@
         shopifyDomain: document.getElementById('shopify-domain').value.trim(),
         shopifyId:     changed('shopify-id'),
         shopifySecret: changed('shopify-secret'),
+        gomagApiShop:  document.getElementById('gomag-api-shop').value.trim(),
+        gomagApiKey:   changed('gomag-api-key'),
+        gomagIdMode:   document.getElementById('gomag-id-mode').value,
+        gomagStatusIds: document.getElementById('gomag-status-ids').value.trim(),
         ga4PropertyId: document.getElementById('ga4-property-id').value.trim()
       };
 

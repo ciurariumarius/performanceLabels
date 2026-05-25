@@ -36,6 +36,8 @@ function onOpen() {
   
   if (platform === 'shopify') {
     devMenu.addItem('🛍️ Get Shopify Data', 'startShopifyReport');
+  } else if (platform === 'gomag') {
+    devMenu.addItem('Get Gomag Data', 'startGomagReport');
   } else {
     devMenu.addItem('🛒 Get WooCommerce Data', 'startWooCommerceReport');
   }
@@ -51,6 +53,8 @@ function onOpen() {
 
   if (platform === 'shopify') {
     settingsMenu.addItem('🕐 Set Up Daily Auto-Fetch (Shopify)', 'setupShopifyComplete');
+  } else if (platform === 'gomag') {
+    settingsMenu.addItem('Set Up Daily Auto-Fetch (Gomag)', 'setupGomagComplete');
   } else {
     settingsMenu.addItem('🕐 Set Up Daily Auto-Fetch (WooCommerce)', 'setupWooCommerceComplete');
   }
@@ -79,6 +83,8 @@ function runMainSync() {
   // Both fetchers are designed to trigger runAllLabelCalculations() when finished.
   if (platform === 'shopify') {
     startShopifyReport();
+  } else if (platform === 'gomag') {
+    startGomagReport();
   } else {
     startWooCommerceReport();
   }
@@ -95,7 +101,7 @@ function showSettingsDialog() {
   const html = HtmlService.createHtmlOutputFromFile('Settings')
       .setTitle('Settings')
       .setWidth(380)
-      .setHeight(420);
+      .setHeight(560);
   SpreadsheetApp.getUi().showModalDialog(html, '⚙️ Platform & API Settings');
 }
 
@@ -120,6 +126,10 @@ function getCurrentSettingsForDialog() {
     shopifyDomain: props.getProperty('SHOPIFY_DOMAIN')      || '',
     shopifyId:     mask('SHOPIFY_CLIENT_ID'),
     shopifySecret: mask('SHOPIFY_CLIENT_SECRET'),
+    gomagApiShop:  props.getProperty('GOMAG_API_SHOP')      || '',
+    gomagApiKey:   mask('GOMAG_API_KEY'),
+    gomagIdMode:   props.getProperty('CFG_GOMAG_ID_MODE')   || DEFAULT_LABEL_CONFIG.Gomag.ProductIdMode,
+    gomagStatusIds: props.getProperty('CFG_GOMAG_ORDER_STATUS_IDS') || '',
     ga4PropertyId: props.getProperty('GA4_PROPERTY_ID')     || ''
   };
 }
@@ -142,6 +152,12 @@ function saveSettingsFromDialog(payload) {
   if (payload.shopifyDomain)  props.setProperty('SHOPIFY_DOMAIN',        payload.shopifyDomain);
   if (payload.shopifyId)      props.setProperty('SHOPIFY_CLIENT_ID',     payload.shopifyId);
   if (payload.shopifySecret)  props.setProperty('SHOPIFY_CLIENT_SECRET', payload.shopifySecret);
+
+  // Gomag
+  if (payload.gomagApiShop) props.setProperty('GOMAG_API_SHOP', payload.gomagApiShop);
+  if (payload.gomagApiKey)  props.setProperty('GOMAG_API_KEY',  payload.gomagApiKey);
+  props.setProperty('CFG_GOMAG_ID_MODE', payload.gomagIdMode || DEFAULT_LABEL_CONFIG.Gomag.ProductIdMode);
+  props.setProperty('CFG_GOMAG_ORDER_STATUS_IDS', payload.gomagStatusIds || '');
 
   // Google Analytics
   if (payload.ga4PropertyId) {
@@ -272,6 +288,12 @@ function viewStoreSettings() {
     const id     = props.getProperty('SHOPIFY_CLIENT_ID')     ? '••••' + props.getProperty('SHOPIFY_CLIENT_ID').slice(-4)     : 'Not configured';
     const secret = props.getProperty('SHOPIFY_CLIENT_SECRET') ? '••••' + props.getProperty('SHOPIFY_CLIENT_SECRET').slice(-4) : 'Not configured';
     message = `🛍️ SHOPIFY\nDomain:     ${domain}\nAPI Key/ID: ${id}\nSecret:     ${secret}\n\n📈 GOOGLE ANALYTICS\nProperty ID: ${gaId}`;
+  } else if (platform === 'gomag') {
+    const apiShop = props.getProperty('GOMAG_API_SHOP') || 'Not configured';
+    const key = props.getProperty('GOMAG_API_KEY') ? '••••' + props.getProperty('GOMAG_API_KEY').slice(-4) : 'Not configured';
+    const idMode = props.getProperty('CFG_GOMAG_ID_MODE') || DEFAULT_LABEL_CONFIG.Gomag.ProductIdMode;
+    const statusIds = props.getProperty('CFG_GOMAG_ORDER_STATUS_IDS') || 'Not configured';
+    message = `GOMAG\nApiShop:    ${apiShop}\nApikey:     ${key}\nID Mode:    ${idMode}\nStatus IDs: ${statusIds}\n\n📈 GOOGLE ANALYTICS\nProperty ID: ${gaId}`;
   } else {
     const domain = props.getProperty('WOOCOMMERCE_DOMAIN') || 'Not configured';
     const key    = props.getProperty('WOOCOMMERCE_API_KEY')    ? '••••' + props.getProperty('WOOCOMMERCE_API_KEY').slice(-4)    : 'Not configured';

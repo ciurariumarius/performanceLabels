@@ -168,21 +168,24 @@ function executeFetchProductsPhase_(config, state, productMap, executionStart) {
     let batchHasData = false;
 
     responses.forEach(res => {
-      if (res.getResponseCode() === 200) {
-        const products = JSON.parse(res.getContentText());
-        if (products.length > 0) {
-          batchHasData = true;
-          products.forEach(p => {
-            let cat = "N/A";
-            if (p.categories && p.categories.length > 0) cat = p.categories[0].name;
-            productMap[p.id] = {
-              id: p.id, name: p.name, category: cat, price: parseFloatSafe(p.price), // Use CommonUtilities
-              stockStatus: p.stock_status, stockQty: parseIntSafe(p.stock_quantity), // Use CommonUtilities
-              dateCreated: p.date_created_gmt,
-              rev: 0, sold: 0, orders: 0, rev14: 0
-            };
-          });
-        }
+      const responseCode = res.getResponseCode();
+      if (responseCode !== 200) {
+        throw new Error(`WooCommerce products API returned ${responseCode}: ${res.getContentText().substring(0, 300)}`);
+      }
+
+      const products = JSON.parse(res.getContentText());
+      if (products.length > 0) {
+        batchHasData = true;
+        products.forEach(p => {
+          let cat = "N/A";
+          if (p.categories && p.categories.length > 0) cat = p.categories[0].name;
+          productMap[p.id] = {
+            id: p.id, name: p.name, category: cat, price: parseFloatSafe(p.price), // Use CommonUtilities
+            stockStatus: p.stock_status, stockQty: parseIntSafe(p.stock_quantity), // Use CommonUtilities
+            dateCreated: p.date_created_gmt,
+            rev: 0, sold: 0, orders: 0, rev14: 0
+          };
+        });
       }
     });
 
@@ -222,30 +225,33 @@ function executeFetchOrdersPhase_(config, state, productMap, executionStart) {
     let batchHasData = false;
 
     responses.forEach(res => {
-      if (res.getResponseCode() === 200) {
-        const orders = JSON.parse(res.getContentText());
-        if (orders.length > 0) {
-          batchHasData = true;
-          orders.forEach(order => {
-            state.uniqueOrdersCount++;
-            const orderDate = new Date(order.date_created_gmt + "Z");
-            if (order.line_items) {
-              order.line_items.forEach(item => {
-                const pid = item.product_id;
-                if (productMap[pid]) {
-                  const lineTotal = parseFloatSafe(item.total);
-                  const qty = parseIntSafe(item.quantity);
-                  productMap[pid].rev += lineTotal;
-                  productMap[pid].sold += qty;
-                  productMap[pid].orders += 1;
-                  state.totalRevenue += lineTotal;
-                  state.totalItemsSold += qty;
-                  if (orderDate >= day14) productMap[pid].rev14 += lineTotal;
-                }
-              });
-            }
-          });
-        }
+      const responseCode = res.getResponseCode();
+      if (responseCode !== 200) {
+        throw new Error(`WooCommerce orders API returned ${responseCode}: ${res.getContentText().substring(0, 300)}`);
+      }
+
+      const orders = JSON.parse(res.getContentText());
+      if (orders.length > 0) {
+        batchHasData = true;
+        orders.forEach(order => {
+          state.uniqueOrdersCount++;
+          const orderDate = new Date(order.date_created_gmt + "Z");
+          if (order.line_items) {
+            order.line_items.forEach(item => {
+              const pid = item.product_id;
+              if (productMap[pid]) {
+                const lineTotal = parseFloatSafe(item.total);
+                const qty = parseIntSafe(item.quantity);
+                productMap[pid].rev += lineTotal;
+                productMap[pid].sold += qty;
+                productMap[pid].orders += 1;
+                state.totalRevenue += lineTotal;
+                state.totalItemsSold += qty;
+                if (orderDate >= day14) productMap[pid].rev14 += lineTotal;
+              }
+            });
+          }
+        });
       }
     });
 
@@ -462,5 +468,4 @@ function loadWooConfig_(ss) {
     authHeader: { "Authorization": "Basic " + Utilities.base64Encode(key + ":" + secret) }
   };
 }
-
 

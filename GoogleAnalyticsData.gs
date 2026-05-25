@@ -64,7 +64,7 @@ function runGA4Report() {
 
     // --- 4. Write Results to Sheets ---
     const displayTimeframe = `${formatDisplayDate(startDateMainObj)} - ${formatDisplayDate(today)}`;
-    writeResultsToSheets_GA4_(spreadsheet, mainReportResults, accountSummaryData, propertyId, displayTimeframe);
+    writeResultsToSheets_GA4_(spreadsheet, mainReportResults, accountSummaryData, propertyId, displayTimeframe, timeframe);
 
     Logger.log('GA4 report generation completed successfully.');
 
@@ -190,8 +190,9 @@ function fetchAccountSummaryData_GA4_(propertyId, startDate, endDate) {
  * @param {object} accountSummaryData The results from fetchAccountSummaryData_GA4_.
  * @param {string} propertyId The GA4 property ID.
  * @param {string} displayTimeframe The formatted date range string for display.
+ * @param {number} timeframe The number of days included in the report.
  */
-function writeResultsToSheets_GA4_(spreadsheet, mainReportResults, accountSummaryData, propertyId, displayTimeframe) {
+function writeResultsToSheets_GA4_(spreadsheet, mainReportResults, accountSummaryData, propertyId, displayTimeframe, timeframe) {
   // --- Write to Analytics Sheet ---
   const analyticsSheet = getOrCreateSheet(spreadsheet, GA4_ANALYTICS_SHEET_NAME);
   analyticsSheet.clearContents();

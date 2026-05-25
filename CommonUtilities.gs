@@ -19,6 +19,10 @@ const DEFAULT_LABEL_CONFIG = {
     ProductIdFormat: 'shopify',
     CountryCode: 'zz'
   },
+  Gomag: {
+    ProductIdMode: 'sku',
+    OrderStatusIds: ''
+  },
   ROAS: { Good: 5, Bad: 3 },
   ConversionRate: { Good: 4, Bad: 0.5 },
   Clicks: { High: 50, Low: 30 },
@@ -61,6 +65,10 @@ function getAppConfig() {
     Shopify: {
       ProductIdFormat: getProp('CFG_SHOPIFY_FORMAT', DEFAULT_LABEL_CONFIG.Shopify.ProductIdFormat),
       CountryCode: getProp('CFG_COUNTRY_CODE', DEFAULT_LABEL_CONFIG.Shopify.CountryCode)
+    },
+    Gomag: {
+      ProductIdMode: getProp('CFG_GOMAG_ID_MODE', DEFAULT_LABEL_CONFIG.Gomag.ProductIdMode),
+      OrderStatusIds: getProp('CFG_GOMAG_ORDER_STATUS_IDS', DEFAULT_LABEL_CONFIG.Gomag.OrderStatusIds)
     },
     ROAS: {
       Good: parseFloatSafe(getProp('CFG_ROAS_GOOD', DEFAULT_LABEL_CONFIG.ROAS.Good), 5),
@@ -109,7 +117,24 @@ function getAppConfig() {
  * @param {GoogleAppsScript.Spreadsheet.Sheet} configSheet The sheet object to read from.
  * @return {object} An object where keys are labels from Col A and values are from Col B. Returns empty object on error.
  */
-function loadConfigurationsFromSheetObject() {
+function loadConfigurationsFromSheetObject(configSheet) {
+  if (configSheet) {
+    try {
+      const lastRow = configSheet.getLastRow();
+      if (lastRow < 1) return {};
+
+      const values = configSheet.getRange(1, 1, lastRow, 2).getValues();
+      return values.reduce((configs, row) => {
+        const key = String(row[0] || "").trim();
+        if (key) configs[key] = row[1];
+        return configs;
+      }, {});
+    } catch (e) {
+      Logger.log(`Error loading configurations from sheet object: ${e.message}`);
+      return {};
+    }
+  }
+
   Logger.log("Loading AppConfig mapped structure...");
   const config = getAppConfig();
   

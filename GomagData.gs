@@ -1,0 +1,564 @@
+/**
+ * @file GomagData.gs
+ * @description Gomag fetcher using the same resumable worker pattern as WooCommerce and Shopify.
+ */
+
+'use strict';
+
+const GOMAG_DATA_SHEET_NAME = "Gomag";
+const GOMAG_ACCOUNT_SHEET_NAME = "Overview";
+const GOMAG_TEMP_FILENAME = "temp_gomag_batch_data.json";
+const GOMAG_MAX_EXECUTION_TIME_MS = 1000 * 60 * 4;
+const GOMAG_PAGE_SIZE = 100;
+const GOMAG_API_BASE_URL = "https://api.gomag.ro/api/v1";
+const GOMAG_USER_AGENT = "PerformanceLabels-GoogleAppsScript/1.0";
+
+const GOMAG_HEADERS = [
+  "Product ID", "Product Name", "Product Category", "Product Price", "Date Created",
+  "Total Orders", "Total Items Sold", "Total Revenue", "Revenue last 14 days",
+  "Stock Status", "Stock Quantity", "Gomag Internal ID", "SKU", "EAN"
+];
+
+function startGomagReport() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    console.error("Could not obtain lock to start Gomag report.");
+    return;
+  }
+
+  try {
+    resetGomagScript_();
+
+    const config = loadGomagConfig_();
+    const startState = {
+      phase: 'FETCH_PRODUCTS',
+      page: 1,
+      writeStartIndex: 0,
+      startTime: new Date().getTime(),
+      uniqueOrdersCount: 0,
+      totalRevenue: 0,
+      totalItemsSold: 0,
+      unmatchedOrderItems: 0,
+      status: "Starting..."
+    };
+
+    const props = PropertiesService.getScriptProperties();
+    props.setProperty('GOMAG_BATCH_STATE', JSON.stringify(startState));
+    props.setProperty('GOMAG_WORKER_STATUS', 'ACTIVE');
+
+    saveGomagDataToDrive_({});
+    logGomagStatus_("STARTED", `Job initialized. ID mode: ${config.idMode}.`);
+    try { SpreadsheetApp.getActiveSpreadsheet().toast("Gomag Job Initiated."); } catch(e) {}
+
+    processGomagWorker();
+
+  } catch (e) {
+    console.error("Error starting Gomag report: " + e.message);
+    logGomagStatus_("ERROR", "Start failed: " + e.message);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function processGomagWorker() {
+  const props = PropertiesService.getScriptProperties();
+  const status = props.getProperty('GOMAG_WORKER_STATUS');
+  if (status !== 'ACTIVE') return;
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return;
+
+  try {
+    processGomagBatchCore_();
+  } catch (e) {
+    console.error("Gomag Worker Error: " + e.message);
+    logGomagStatus_("ERROR", e.message);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function forceResumeGomagReport() {
+  PropertiesService.getScriptProperties().setProperty('GOMAG_WORKER_STATUS', 'ACTIVE');
+  processGomagWorker();
+}
+
+function processGomagBatchCore_() {
+  const executionStart = new Date().getTime();
+  const props = PropertiesService.getScriptProperties();
+  const rawState = props.getProperty('GOMAG_BATCH_STATE');
+  let state = rawState ? JSON.parse(rawState) : null;
+  let productMap = null;
+
+  if (!state) {
+    props.setProperty('GOMAG_WORKER_STATUS', 'IDLE');
+    return;
+  }
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const config = loadGomagConfig_();
+    productMap = loadGomagDataFromDrive_();
+
+    if (state.phase === 'FETCH_PRODUCTS') {
+      executeGomagFetchProductsPhase_(config, state, productMap, executionStart);
+    }
+
+    if (state.phase === 'FETCH_ORDERS' && !isGomagTimeUp_(executionStart)) {
+      executeGomagFetchOrdersPhase_(config, state, productMap, executionStart);
+    }
+
+    if (state.phase === 'WRITE_DATA' && !isGomagTimeUp_(executionStart)) {
+      executeGomagWriteDataPhase_(config, state, productMap, executionStart, ss);
+      return;
+    }
+
+    saveGomagDataToDrive_(productMap);
+    props.setProperty('GOMAG_BATCH_STATE', JSON.stringify(state));
+
+  } catch (e) {
+    if (productMap && state) {
+      try {
+        saveGomagDataToDrive_(productMap);
+        props.setProperty('GOMAG_BATCH_STATE', JSON.stringify(state));
+      } catch (saveError) {
+        console.error("Failed to preserve Gomag state after error: " + saveError.message);
+      }
+    }
+    console.error("Gomag Core Error: " + e.message);
+    logGomagStatus_("ERROR", e.message);
+  }
+}
+
+function executeGomagFetchProductsPhase_(config, state, productMap, executionStart) {
+  logGomagStatus_("RUNNING", `Fetching Gomag products (Page ${state.page})...`);
+
+  while (!isGomagTimeUp_(executionStart)) {
+    const endpoint = `${GOMAG_API_BASE_URL}/product/read/json?page=${state.page}&limit=${GOMAG_PAGE_SIZE}&addVersions=true`;
+    const response = fetchGomagJson_(endpoint, config);
+    const products = extractGomagItems_(response, ['products', 'data', 'items']);
+
+    products.forEach(product => {
+      addGomagProductToMap_(productMap, product, config);
+    });
+
+    logGomagStatus_("RUNNING", `Fetched Gomag products page ${state.page}.`);
+
+    if (products.length < GOMAG_PAGE_SIZE) {
+      state.phase = 'FETCH_ORDERS';
+      state.page = 1;
+      return;
+    }
+
+    state.page++;
+  }
+}
+
+function executeGomagFetchOrdersPhase_(config, state, productMap, executionStart) {
+  logGomagStatus_("RUNNING", `Fetching Gomag orders (Page ${state.page})...`);
+
+  const timeZone = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+  const endDate = new Date();
+  const startDate = new Date(endDate.getTime() - config.days * 86400000);
+  const day14 = new Date(endDate.getTime() - 14 * 86400000);
+  const start = Utilities.formatDate(startDate, timeZone, "yyyy-MM-dd");
+  const end = Utilities.formatDate(endDate, timeZone, "yyyy-MM-dd");
+  const statusParam = encodeURIComponent(config.orderStatusIds);
+
+  while (!isGomagTimeUp_(executionStart)) {
+    const endpoint = `${GOMAG_API_BASE_URL}/order/read/json?startDate=${start}&endDate=${end}&statusIds=${statusParam}&page=${state.page}`;
+    const response = fetchGomagJson_(endpoint, config);
+    const orders = extractGomagItems_(response, ['orders', 'data', 'items']);
+
+    orders.forEach(order => {
+      processGomagOrder_(order, productMap, state, config, day14);
+    });
+
+    logGomagStatus_("RUNNING", `Fetched Gomag orders page ${state.page}.`);
+
+    if (orders.length < GOMAG_PAGE_SIZE) {
+      state.phase = 'WRITE_DATA';
+      state.writeStartIndex = 0;
+      return;
+    }
+
+    state.page++;
+  }
+}
+
+function executeGomagWriteDataPhase_(config, state, productMap, executionStart, ss) {
+  const props = PropertiesService.getScriptProperties();
+  const sheet = getOrCreateSheet(ss, GOMAG_DATA_SHEET_NAME);
+
+  if (state.writeStartIndex === 0) {
+    sheet.clear();
+    sheet.getRange(1, 1, 1, GOMAG_HEADERS.length)
+      .setValues([GOMAG_HEADERS])
+      .setFontWeight("bold")
+      .setHorizontalAlignment("center");
+  }
+
+  const rows = Object.values(productMap).map(p => [
+    p.id, p.name, p.category, p.price, p.dateCreated,
+    p.orders, p.sold, p.rev, p.rev14, p.stockStatus, p.stockQty,
+    p.internalId, p.sku, p.ean
+  ]).sort((a, b) => b[7] - a[7]);
+
+  if (rows.length > 0) {
+    const chunkSize = 1500;
+    let doneWriting = true;
+
+    for (let i = state.writeStartIndex; i < rows.length; i += chunkSize) {
+      if (isGomagTimeUp_(executionStart)) {
+        logGomagStatus_("PAUSED", `Writing paused at row ${i}.`);
+        state.writeStartIndex = i;
+        doneWriting = false;
+        break;
+      }
+
+      const chunk = rows.slice(i, i + chunkSize);
+      sheet.getRange(2 + i, 1, chunk.length, GOMAG_HEADERS.length).setValues(chunk);
+      SpreadsheetApp.flush();
+      logGomagStatus_("WRITING", `Writing rows ${i} - ${i + chunk.length}...`);
+    }
+
+    if (doneWriting) {
+      sheet.getRange(2, 4, rows.length, 1).setNumberFormat('#,##0.00');
+      sheet.getRange(2, 8, rows.length, 2).setNumberFormat('#,##0.00');
+    }
+
+    if (!doneWriting) {
+      saveGomagDataToDrive_(productMap);
+      props.setProperty('GOMAG_BATCH_STATE', JSON.stringify(state));
+      return;
+    }
+  }
+
+  const allProducts = Object.values(productMap);
+  let oosWithSalesCount = 0;
+  let totalWithSalesCount = 0;
+
+  allProducts.forEach(product => {
+    if (product.rev > 0) {
+      totalWithSalesCount++;
+      if (String(product.stockStatus || "").toLowerCase() !== "instock") {
+        oosWithSalesCount++;
+      }
+    }
+  });
+
+  const oosPercent = totalWithSalesCount > 0
+    ? ((oosWithSalesCount / totalWithSalesCount) * 100).toFixed(1) + "%"
+    : "0%";
+
+  updateDashboardMetrics(ss, GOMAG_ACCOUNT_SHEET_NAME, {
+    kind: 'store',
+    rev: state.totalRevenue,
+    orders: state.uniqueOrdersCount,
+    products: allProducts.length,
+    oosCount: oosWithSalesCount,
+    oosPercent: oosPercent
+  });
+
+  appendToOverviewLog(
+    ss,
+    GOMAG_ACCOUNT_SHEET_NAME,
+    `Gomag Sync (${config.days}d)`,
+    "SUCCESS",
+    `Fetched ${allProducts.length} items. Unmatched order items: ${state.unmatchedOrderItems || 0}`,
+    config.days
+  );
+
+  logGomagStatus_("COMPLETED", "Finished successfully.");
+  resetGomagScript_();
+  props.setProperty('GOMAG_WORKER_STATUS', 'IDLE');
+
+  try {
+    Logger.log("Triggering Label Calculations...");
+    runAllLabelCalculations();
+  } catch (e) {
+    console.error("Failed to trigger labels: " + e.message);
+  }
+}
+
+function addGomagProductToMap_(productMap, product, config) {
+  const versions = Array.isArray(product.versions) && product.versions.length > 0
+    ? product.versions
+    : [product];
+
+  versions.forEach(version => {
+    const productData = normalizeGomagProduct_(product, version, config);
+    const mapKey = productData.id || `missing_id_${productData.internalId || ""}_${productData.sku || ""}_${productData.ean || ""}`;
+    productMap[mapKey] = productData;
+  });
+}
+
+function normalizeGomagProduct_(product, version, config) {
+  const internalId = String(firstDefinedGomag_(product.id, product.product, product.productId, "") || "");
+  const sku = String(firstDefinedGomag_(version.sku, product.sku, "") || "");
+  const ean = String(firstDefinedGomag_(version.ean, product.ean, "") || "");
+  const id = resolveGomagProductId_(config.idMode, internalId, sku, ean);
+  const price = resolveGomagPrice_(version, product);
+
+  return {
+    id: id,
+    name: resolveGomagLocalized_(firstDefinedGomag_(product.name, version.name, "")),
+    category: resolveGomagCategory_(product.categories),
+    price: price,
+    dateCreated: firstDefinedGomag_(product.date_created, product.dateCreated, product.created_at, product.created, product.date, ""),
+    orders: 0,
+    sold: 0,
+    rev: 0,
+    rev14: 0,
+    stockStatus: firstDefinedGomag_(version.stockStatus, product.stockStatus, ""),
+    stockQty: parseIntSafe(firstDefinedGomag_(version.stock, product.stock, 0), 0),
+    internalId: internalId,
+    sku: sku,
+    ean: ean
+  };
+}
+
+function processGomagOrder_(order, productMap, state, config, day14) {
+  state.uniqueOrdersCount++;
+  const orderDate = parseGomagDate_(firstDefinedGomag_(order.date, order.created_at, order.created, order.dateCreated, ""));
+  const products = Array.isArray(order.products) && order.products.length > 0
+    ? order.products
+    : (Array.isArray(order.items) && order.items.length > 0
+      ? order.items
+      : (Array.isArray(order.line_items) ? order.line_items : []));
+
+  products.forEach(item => {
+    const key = resolveGomagOrderItemKey_(item, config);
+    const product = key ? productMap[key] : null;
+
+    if (!product) {
+      state.unmatchedOrderItems = (state.unmatchedOrderItems || 0) + 1;
+      return;
+    }
+
+    const qty = parseIntSafe(firstDefinedGomag_(item.quantity, item.qty, 0), 0);
+    const lineRevenue = resolveGomagLineRevenue_(item, qty);
+
+    product.rev += lineRevenue;
+    product.sold += qty;
+    product.orders += 1;
+    state.totalRevenue += lineRevenue;
+    state.totalItemsSold += qty;
+
+    if (orderDate && orderDate >= day14) {
+      product.rev14 += lineRevenue;
+    }
+  });
+}
+
+function resolveGomagOrderItemKey_(item, config) {
+  const internalId = String(firstDefinedGomag_(item.product, item.productId, item.product_id, item.id, "") || "");
+  const sku = String(firstDefinedGomag_(item.sku, item.SKU, "") || "");
+  const ean = String(firstDefinedGomag_(item.ean, item.EAN, "") || "");
+  return resolveGomagProductId_(config.idMode, internalId, sku, ean);
+}
+
+function resolveGomagProductId_(idMode, internalId, sku, ean) {
+  if (idMode === "product_id") return String(internalId || "").trim();
+  if (idMode === "ean") return String(ean || "").trim();
+  return String(sku || "").trim();
+}
+
+function resolveGomagPrice_(version, product) {
+  const specialPrice = parseFloatSafe(firstDefinedGomag_(version.specialPrice, product.specialPrice, ""), 0);
+  if (specialPrice > 0) return specialPrice;
+  return parseFloatSafe(firstDefinedGomag_(version.price, product.price, 0), 0);
+}
+
+function resolveGomagLineRevenue_(item, qty) {
+  const directTotal = parseFloatSafe(firstDefinedGomag_(item.total, item.value, item.subtotal, ""), NaN);
+  if (!isNaN(directTotal)) return directTotal;
+  return parseFloatSafe(firstDefinedGomag_(item.price, 0), 0) * qty;
+}
+
+function fetchGomagJson_(endpoint, config, retries = 3) {
+  const options = {
+    method: 'get',
+    muteHttpExceptions: true,
+    headers: {
+      'Apikey': config.apiKey,
+      'ApiShop': config.apiShop,
+      'User-Agent': GOMAG_USER_AGENT
+    }
+  };
+
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = UrlFetchApp.fetch(endpoint, options);
+      const code = response.getResponseCode();
+      const body = response.getContentText();
+
+      if (code >= 200 && code < 300) {
+        return JSON.parse(body);
+      }
+
+      if (i < retries - 1 && (code === 429 || code >= 500)) {
+        Utilities.sleep(1000 * Math.pow(2, i));
+        continue;
+      }
+
+      throw new Error(`Gomag API returned ${code}: ${body.substring(0, 300)}`);
+    } catch (e) {
+      if (i === retries - 1) throw e;
+      Utilities.sleep(1000 * Math.pow(2, i));
+    }
+  }
+
+  throw new Error(`Failed to fetch Gomag endpoint: ${endpoint}`);
+}
+
+function extractGomagItems_(response, preferredKeys) {
+  if (Array.isArray(response)) return response;
+
+  for (let i = 0; i < preferredKeys.length; i++) {
+    const value = response && response[preferredKeys[i]];
+    if (Array.isArray(value)) return value;
+  }
+
+  if (response && response.data) {
+    for (const key in response.data) {
+      if (Array.isArray(response.data[key])) return response.data[key];
+    }
+  }
+
+  if (response && response.response) {
+    if (Array.isArray(response.response)) return response.response;
+    for (const key in response.response) {
+      if (Array.isArray(response.response[key])) return response.response[key];
+    }
+  }
+
+  for (const key in response) {
+    if (Array.isArray(response[key])) return response[key];
+  }
+
+  return [];
+}
+
+function resolveGomagLocalized_(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  if (value.ro) return String(value.ro);
+
+  for (const key in value) {
+    if (value[key]) return String(value[key]);
+  }
+
+  return "";
+}
+
+function resolveGomagCategory_(categories) {
+  if (!Array.isArray(categories) || categories.length === 0) return "N/A";
+  const firstPath = categories[0];
+
+  if (Array.isArray(firstPath)) {
+    return firstPath.map(resolveGomagLocalized_).filter(String).join(" > ") || "N/A";
+  }
+
+  return resolveGomagLocalized_(firstPath) || "N/A";
+}
+
+function parseGomagDate_(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return isNaN(date.valueOf()) ? null : date;
+}
+
+function firstDefinedGomag_() {
+  for (let i = 0; i < arguments.length; i++) {
+    if (arguments[i] !== null && arguments[i] !== undefined && arguments[i] !== "") {
+      return arguments[i];
+    }
+  }
+  return "";
+}
+
+function loadGomagConfig_() {
+  const appConfig = getAppConfig();
+  const props = PropertiesService.getScriptProperties();
+  const apiShop = props.getProperty('GOMAG_API_SHOP');
+  const apiKey = props.getProperty('GOMAG_API_KEY');
+  const idMode = props.getProperty('CFG_GOMAG_ID_MODE') || appConfig.Gomag.ProductIdMode || 'sku';
+  const orderStatusIds = props.getProperty('CFG_GOMAG_ORDER_STATUS_IDS') || appConfig.Gomag.OrderStatusIds || '';
+
+  if (!apiShop || !apiKey) {
+    throw new Error("Missing Gomag Settings! Please configure ApiShop and Apikey in Performance Labels settings.");
+  }
+
+  if (!orderStatusIds.trim()) {
+    throw new Error("Missing Gomag Order Status IDs. Configure comma-separated status IDs before running Gomag sync.");
+  }
+
+  if (!["sku", "product_id", "ean"].includes(idMode)) {
+    throw new Error(`Invalid Gomag Product ID Mode: ${idMode}`);
+  }
+
+  return {
+    apiShop: apiShop,
+    apiKey: apiKey,
+    idMode: idMode,
+    orderStatusIds: orderStatusIds,
+    days: appConfig.TimeframeDays
+  };
+}
+
+function logGomagStatus_(status, message) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    updateDashboardStatus(ss, GOMAG_ACCOUNT_SHEET_NAME, status, message);
+  } catch(e) {
+    console.warn("Failed to update Gomag status: " + e.message);
+  }
+}
+
+function resetGomagScript_() {
+  const props = PropertiesService.getScriptProperties();
+  const fileId = props.getProperty('GOMAG_TEMP_FILE_ID');
+  if (fileId) {
+    try { DriveApp.getFileById(fileId).setTrashed(true); } catch(e) {}
+    props.deleteProperty('GOMAG_TEMP_FILE_ID');
+  }
+  props.deleteProperty('GOMAG_BATCH_STATE');
+}
+
+function isGomagTimeUp_(startTime) {
+  return (new Date().getTime() - startTime) > GOMAG_MAX_EXECUTION_TIME_MS;
+}
+
+function saveGomagDataToDrive_(data) {
+  const content = JSON.stringify(data);
+  const props = PropertiesService.getScriptProperties();
+  const fileId = props.getProperty('GOMAG_TEMP_FILE_ID');
+
+  if (fileId) {
+    try {
+      DriveApp.getFileById(fileId).setContent(content);
+      return;
+    } catch (e) {
+      console.warn("Could not write to existing Gomag temp file. Creating a new one.");
+    }
+  }
+
+  const file = DriveApp.createFile(GOMAG_TEMP_FILENAME, content, MimeType.PLAIN_TEXT);
+  props.setProperty('GOMAG_TEMP_FILE_ID', file.getId());
+}
+
+function loadGomagDataFromDrive_() {
+  const props = PropertiesService.getScriptProperties();
+  const fileId = props.getProperty('GOMAG_TEMP_FILE_ID');
+
+  if (fileId) {
+    try {
+      return JSON.parse(DriveApp.getFileById(fileId).getBlob().getDataAsString());
+    } catch (e) {
+      console.error("Failed to load Gomag temp data: " + e.message);
+    }
+  }
+
+  return {};
+}

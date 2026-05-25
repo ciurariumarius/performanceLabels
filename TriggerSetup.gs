@@ -84,6 +84,36 @@ function setupShopifyComplete() {
 }
 
 /**
+ * OPTION 3: Gomag Complete Setup
+ * --------------------------------
+ * Sets up:
+ * 1. Gomag Daily Start (5:00 AM)
+ * 2. Gomag Worker (Every 5 mins)
+ */
+function setupGomagComplete() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  deleteTriggersForHandler_('startGomagReport');
+  deleteTriggersForHandler_('processGomagWorker');
+  deleteTriggersForHandler_('runAllLabelCalculations');
+
+  ScriptApp.newTrigger('startGomagReport')
+    .timeBased()
+    .everyDays(1)
+    .atHour(5)
+    .create();
+
+  ScriptApp.newTrigger('processGomagWorker')
+    .timeBased()
+    .everyMinutes(5)
+    .create();
+
+  const msg = "Gomag Complete Setup Done (Data + Labels).";
+  console.log(msg);
+  ss.toast(msg);
+}
+
+/**
  * HELPER: Deletes all triggers for a specific function name.
  * @param {string} handlerName The name of the function to clear triggers for.
  */
