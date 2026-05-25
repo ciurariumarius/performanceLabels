@@ -49,13 +49,14 @@
       <div class="platform-btn" id="btn-woo" onclick="setPlatform('woocommerce')">🛒 WooCommerce</div>
       <div class="platform-btn" id="btn-shopify" onclick="setPlatform('shopify')">🛍️ Shopify</div>
       <div class="platform-btn" id="btn-gomag" onclick="setPlatform('gomag')">Gomag</div>
+      <div class="platform-btn" id="btn-ga4" onclick="setPlatform('ga4')">GA4</div>
     </div>
   </div>
 
   <hr class="divider">
 
   <!-- Google Analytics Fields -->
-  <div class="section">
+  <div id="section-ga4" class="platform-section">
     <label>GA4 Property ID</label>
     <div class="hint">e.g., 123456789</div>
     <input type="text" id="ga4-property-id" placeholder="Enter Property ID">
@@ -66,7 +67,7 @@
   <!-- WooCommerce Fields -->
   <div id="section-woocommerce" class="platform-section">
     <div class="section">
-      <label>Store Domain</label>
+      <label>WooCommerce Domain</label>
       <div class="hint">e.g., myshop.com (no https://)</div>
       <input type="text" id="woo-domain" placeholder="myshop.com">
     </div>
@@ -83,7 +84,7 @@
   <!-- Shopify Fields -->
   <div id="section-shopify" class="platform-section">
     <div class="section">
-      <label>Store Domain</label>
+      <label>Shopify Domain</label>
       <div class="hint">e.g., mystore.myshopify.com</div>
       <input type="text" id="shopify-domain" placeholder="mystore.myshopify.com">
     </div>
@@ -116,11 +117,6 @@
         <option value="ean">EAN</option>
       </select>
     </div>
-    <div class="section">
-      <label>Order Status IDs</label>
-      <div class="hint">Comma-separated Gomag status IDs to count in revenue/orders.</div>
-      <input type="text" id="gomag-status-ids" placeholder="721,722">
-    </div>
   </div>
 
   <div id="status">✅ Settings saved!</div>
@@ -132,12 +128,12 @@
   </div>
 
   <script>
-    var currentPlatform = 'woocommerce';
+    var currentPlatform = '';
 
     // On load: get current settings from server
     google.script.run
       .withSuccessHandler(function(data) {
-        setPlatform(data.platform || 'woocommerce');
+        setPlatform(data.platform || '');
         document.getElementById('woo-domain').value     = data.wooDomain     || '';
         document.getElementById('woo-key').value        = data.wooKey        || '';
         document.getElementById('woo-secret').value     = data.wooSecret     || '';
@@ -147,7 +143,6 @@
         document.getElementById('gomag-api-shop').value = data.gomagApiShop || '';
         document.getElementById('gomag-api-key').value  = data.gomagApiKey  || '';
         document.getElementById('gomag-id-mode').value  = data.gomagIdMode  || 'sku';
-        document.getElementById('gomag-status-ids').value = data.gomagStatusIds || '';
         document.getElementById('ga4-property-id').value = data.ga4PropertyId || '';
       })
       .getCurrentSettingsForDialog();
@@ -165,9 +160,11 @@
       document.getElementById('btn-woo').classList.toggle('active', p === 'woocommerce');
       document.getElementById('btn-shopify').classList.toggle('active', p === 'shopify');
       document.getElementById('btn-gomag').classList.toggle('active', p === 'gomag');
+      document.getElementById('btn-ga4').classList.toggle('active', p === 'ga4');
       document.getElementById('section-woocommerce').classList.toggle('visible', p === 'woocommerce');
       document.getElementById('section-shopify').classList.toggle('visible', p === 'shopify');
       document.getElementById('section-gomag').classList.toggle('visible', p === 'gomag');
+      document.getElementById('section-ga4').classList.toggle('visible', p === 'ga4');
     }
 
     function saveSettings() {
@@ -175,6 +172,13 @@
       function changed(id) {
         var v = document.getElementById(id).value.trim();
         return v && !v.startsWith('\u2022') ? v : '';
+      }
+
+      if (!currentPlatform) {
+        document.getElementById('status').style.display = 'none';
+        document.getElementById('error').textContent = 'Please select a platform first.';
+        document.getElementById('error').style.display = 'block';
+        return;
       }
 
       var payload = {
@@ -188,7 +192,6 @@
         gomagApiShop:  document.getElementById('gomag-api-shop').value.trim(),
         gomagApiKey:   changed('gomag-api-key'),
         gomagIdMode:   document.getElementById('gomag-id-mode').value,
-        gomagStatusIds: document.getElementById('gomag-status-ids').value.trim(),
         ga4PropertyId: document.getElementById('ga4-property-id').value.trim()
       };
 

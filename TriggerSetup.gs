@@ -114,6 +114,28 @@ function setupGomagComplete() {
 }
 
 /**
+ * OPTION 4: GA4 Complete Setup
+ * ----------------------------
+ * Sets up:
+ * 1. GA4 Daily Report (5:00 AM)
+ */
+function setupGA4Complete() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  deleteTriggersForHandler_('runGA4Report');
+
+  ScriptApp.newTrigger('runGA4Report')
+    .timeBased()
+    .everyDays(1)
+    .atHour(5)
+    .create();
+
+  const msg = "GA4 Complete Setup Done.";
+  console.log(msg);
+  ss.toast(msg);
+}
+
+/**
  * HELPER: Deletes all triggers for a specific function name.
  * @param {string} handlerName The name of the function to clear triggers for.
  */

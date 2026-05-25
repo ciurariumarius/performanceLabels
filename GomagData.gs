@@ -163,10 +163,9 @@ function executeGomagFetchOrdersPhase_(config, state, productMap, executionStart
   const day14 = new Date(endDate.getTime() - 14 * 86400000);
   const start = Utilities.formatDate(startDate, timeZone, "yyyy-MM-dd");
   const end = Utilities.formatDate(endDate, timeZone, "yyyy-MM-dd");
-  const statusParam = encodeURIComponent(config.orderStatusIds);
 
   while (!isGomagTimeUp_(executionStart)) {
-    const endpoint = `${GOMAG_API_BASE_URL}/order/read/json?startDate=${start}&endDate=${end}&statusIds=${statusParam}&page=${state.page}`;
+    const endpoint = `${GOMAG_API_BASE_URL}/order/read/json?startDate=${start}&endDate=${end}&page=${state.page}`;
     const response = fetchGomagJson_(endpoint, config);
     const orders = extractGomagItems_(response, ['orders', 'data', 'items']);
 
@@ -484,14 +483,9 @@ function loadGomagConfig_() {
   const apiShop = props.getProperty('GOMAG_API_SHOP');
   const apiKey = props.getProperty('GOMAG_API_KEY');
   const idMode = props.getProperty('CFG_GOMAG_ID_MODE') || appConfig.Gomag.ProductIdMode || 'sku';
-  const orderStatusIds = props.getProperty('CFG_GOMAG_ORDER_STATUS_IDS') || appConfig.Gomag.OrderStatusIds || '';
 
   if (!apiShop || !apiKey) {
     throw new Error("Missing Gomag Settings! Please configure ApiShop and Apikey in Performance Labels settings.");
-  }
-
-  if (!orderStatusIds.trim()) {
-    throw new Error("Missing Gomag Order Status IDs. Configure comma-separated status IDs before running Gomag sync.");
   }
 
   if (!["sku", "product_id", "ean"].includes(idMode)) {
@@ -502,7 +496,6 @@ function loadGomagConfig_() {
     apiShop: apiShop,
     apiKey: apiKey,
     idMode: idMode,
-    orderStatusIds: orderStatusIds,
     days: appConfig.TimeframeDays
   };
 }

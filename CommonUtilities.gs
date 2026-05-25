@@ -10,7 +10,7 @@
 // --- Default configuration (Fallbacks for script duplication) ---
 // =========================================================================================
 const DEFAULT_LABEL_CONFIG = {
-  Platform: 'woocommerce',
+  Platform: '',
   TimeframeDays: 30,
   NewProductDays: 30,
   IdPrefix: "",
@@ -20,8 +20,7 @@ const DEFAULT_LABEL_CONFIG = {
     CountryCode: 'zz'
   },
   Gomag: {
-    ProductIdMode: 'sku',
-    OrderStatusIds: ''
+    ProductIdMode: 'sku'
   },
   ROAS: { Good: 5, Bad: 3 },
   ConversionRate: { Good: 4, Bad: 0.5 },
@@ -67,8 +66,7 @@ function getAppConfig() {
       CountryCode: getProp('CFG_COUNTRY_CODE', DEFAULT_LABEL_CONFIG.Shopify.CountryCode)
     },
     Gomag: {
-      ProductIdMode: getProp('CFG_GOMAG_ID_MODE', DEFAULT_LABEL_CONFIG.Gomag.ProductIdMode),
-      OrderStatusIds: getProp('CFG_GOMAG_ORDER_STATUS_IDS', DEFAULT_LABEL_CONFIG.Gomag.OrderStatusIds)
+      ProductIdMode: getProp('CFG_GOMAG_ID_MODE', DEFAULT_LABEL_CONFIG.Gomag.ProductIdMode)
     },
     ROAS: {
       Good: parseFloatSafe(getProp('CFG_ROAS_GOOD', DEFAULT_LABEL_CONFIG.ROAS.Good), 5),

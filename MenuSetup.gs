@@ -14,7 +14,7 @@
  */
 function getActivePlatform() {
   const stored = PropertiesService.getScriptProperties().getProperty('PLATFORM');
-  return stored || getAppConfig().Platform;
+  return stored || getAppConfig().Platform || '';
 }
 
 // ---------------------------------------------------------------------------
@@ -38,11 +38,17 @@ function onOpen() {
     devMenu.addItem('🛍️ Get Shopify Data', 'startShopifyReport');
   } else if (platform === 'gomag') {
     devMenu.addItem('Get Gomag Data', 'startGomagReport');
-  } else {
+  } else if (platform === 'ga4') {
+    devMenu.addItem('📈 Get Google Analytics Data', 'runGA4Report');
+  } else if (platform === 'woocommerce') {
     devMenu.addItem('🛒 Get WooCommerce Data', 'startWooCommerceReport');
+  } else {
+    devMenu.addItem('Configure Platform First', 'showSettingsDialog');
   }
   
-  devMenu.addItem('📈 Get Google Analytics Data', 'runGA4Report');
+  if (platform && platform !== 'ga4') {
+    devMenu.addItem('📈 Get Google Analytics Data', 'runGA4Report');
+  }
   devMenu.addItem('🏷️ Recalculate Labels', 'runAllLabelCalculations');
 
   const settingsMenu = ui.createMenu('⚙️ Settings')
@@ -55,8 +61,12 @@ function onOpen() {
     settingsMenu.addItem('🕐 Set Up Daily Auto-Fetch (Shopify)', 'setupShopifyComplete');
   } else if (platform === 'gomag') {
     settingsMenu.addItem('Set Up Daily Auto-Fetch (Gomag)', 'setupGomagComplete');
-  } else {
+  } else if (platform === 'ga4') {
+    settingsMenu.addItem('Set Up Daily Auto-Fetch (GA4)', 'setupGA4Complete');
+  } else if (platform === 'woocommerce') {
     settingsMenu.addItem('🕐 Set Up Daily Auto-Fetch (WooCommerce)', 'setupWooCommerceComplete');
+  } else {
+    settingsMenu.addItem('Choose Platform First', 'showSettingsDialog');
   }
 
   menu.addSeparator()
@@ -85,8 +95,16 @@ function runMainSync() {
     startShopifyReport();
   } else if (platform === 'gomag') {
     startGomagReport();
-  } else {
+  } else if (platform === 'ga4') {
+    runGA4Report();
+  } else if (platform === 'woocommerce') {
     startWooCommerceReport();
+  } else {
+    SpreadsheetApp.getUi().alert(
+      'Platform not configured',
+      'Please open Performance Labels > Settings > Update API Settings and select a platform first.',
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
   }
 }
 
@@ -129,7 +147,6 @@ function getCurrentSettingsForDialog() {
     gomagApiShop:  props.getProperty('GOMAG_API_SHOP')      || '',
     gomagApiKey:   mask('GOMAG_API_KEY'),
     gomagIdMode:   props.getProperty('CFG_GOMAG_ID_MODE')   || DEFAULT_LABEL_CONFIG.Gomag.ProductIdMode,
-    gomagStatusIds: props.getProperty('CFG_GOMAG_ORDER_STATUS_IDS') || '',
     ga4PropertyId: props.getProperty('GA4_PROPERTY_ID')     || ''
   };
 }
@@ -157,12 +174,11 @@ function saveSettingsFromDialog(payload) {
   if (payload.gomagApiShop) props.setProperty('GOMAG_API_SHOP', payload.gomagApiShop);
   if (payload.gomagApiKey)  props.setProperty('GOMAG_API_KEY',  payload.gomagApiKey);
   props.setProperty('CFG_GOMAG_ID_MODE', payload.gomagIdMode || DEFAULT_LABEL_CONFIG.Gomag.ProductIdMode);
-  props.setProperty('CFG_GOMAG_ORDER_STATUS_IDS', payload.gomagStatusIds || '');
 
   // Google Analytics
   if (payload.ga4PropertyId) {
     props.setProperty('GA4_PROPERTY_ID', payload.ga4PropertyId);
-  } else {
+  } else if (payload.platform === 'ga4') {
     // Note: If they intentionally blank it out, we should probably delete it.
     // However, keeping consistent with the rest of the script that only sets to non-empty.
     // If we want them to clear it, we could use setProperty('GA4_PROPERTY_ID', '') instead.
@@ -281,24 +297,31 @@ function viewStoreSettings() {
   const platform = getActivePlatform();
   let message;
 
-  const gaId  = props.getProperty('GA4_PROPERTY_ID') || 'Not configured';
-
   if (platform === 'shopify') {
     const domain = props.getProperty('SHOPIFY_DOMAIN') || 'Not configured';
     const id     = props.getProperty('SHOPIFY_CLIENT_ID')     ? '••••' + props.getProperty('SHOPIFY_CLIENT_ID').slice(-4)     : 'Not configured';
     const secret = props.getProperty('SHOPIFY_CLIENT_SECRET') ? '••••' + props.getProperty('SHOPIFY_CLIENT_SECRET').slice(-4) : 'Not configured';
-    message = `🛍️ SHOPIFY\nDomain:     ${domain}\nAPI Key/ID: ${id}\nSecret:     ${secret}\n\n📈 GOOGLE ANALYTICS\nProperty ID: ${gaId}`;
+    message = `🛍️ SHOPIFY\nDomain:     ${domain}\nAPI Key/ID: ${id}\nSecret:     ${secret}`;
   } else if (platform === 'gomag') {
     const apiShop = props.getProperty('GOMAG_API_SHOP') || 'Not configured';
     const key = props.getProperty('GOMAG_API_KEY') ? '••••' + props.getProperty('GOMAG_API_KEY').slice(-4) : 'Not configured';
     const idMode = props.getProperty('CFG_GOMAG_ID_MODE') || DEFAULT_LABEL_CONFIG.Gomag.ProductIdMode;
-    const statusIds = props.getProperty('CFG_GOMAG_ORDER_STATUS_IDS') || 'Not configured';
-    message = `GOMAG\nApiShop:    ${apiShop}\nApikey:     ${key}\nID Mode:    ${idMode}\nStatus IDs: ${statusIds}\n\n📈 GOOGLE ANALYTICS\nProperty ID: ${gaId}`;
-  } else {
+    message = `GOMAG\nApiShop:    ${apiShop}\nApikey:     ${key}\nID Mode:    ${idMode}`;
+  } else if (platform === 'ga4') {
+    const gaId  = props.getProperty('GA4_PROPERTY_ID') || 'Not configured';
+    message = `GOOGLE ANALYTICS 4\nProperty ID: ${gaId}`;
+  } else if (platform === 'woocommerce') {
     const domain = props.getProperty('WOOCOMMERCE_DOMAIN') || 'Not configured';
     const key    = props.getProperty('WOOCOMMERCE_API_KEY')    ? '••••' + props.getProperty('WOOCOMMERCE_API_KEY').slice(-4)    : 'Not configured';
     const secret = props.getProperty('WOOCOMMERCE_API_SECRET') ? '••••' + props.getProperty('WOOCOMMERCE_API_SECRET').slice(-4) : 'Not configured';
-    message = `🛒 WOOCOMMERCE\nDomain:     ${domain}\nAPI Key:    ${key}\nSecret:     ${secret}\n\n📈 GOOGLE ANALYTICS\nProperty ID: ${gaId}`;
+    message = `🛒 WOOCOMMERCE\nDomain:     ${domain}\nAPI Key:    ${key}\nSecret:     ${secret}`;
+  } else {
+    ui.alert(
+      'Platform not configured',
+      'Please open Performance Labels > Settings > Update API Settings and select a platform first.',
+      ui.ButtonSet.OK
+    );
+    return;
   }
 
   ui.alert(`Current Settings — Platform: ${platform}`, message, ui.ButtonSet.OK);

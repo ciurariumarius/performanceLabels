@@ -2,6 +2,21 @@
 CHANGELOG
 =========
 
+2026-05-25
+----------
+- GomagData.gs: Added a new Gomag store data fetcher using the same resumable worker pattern as WooCommerce and Shopify. It reads products and orders from the Gomag Public API, writes a `Gomag` source sheet, updates Overview, and triggers label recalculation after sync.
+- MenuSetup.gs / Settings.html / TriggerSetup.gs: Added `gomag` as a selectable platform with ApiShop, Apikey, product ID mode, manual run, credential view, and daily auto-fetch setup.
+- Settings.html / MenuSetup.gs / TriggerSetup.gs: Added GA4 as its own selectable settings platform so the GA4 Property ID is only shown while configuring GA4.
+- GomagData.gs / Settings.html: Gomag now imports all orders in the selected timeframe and no longer requires Order Status IDs.
+- CommonUtilities.gs / MenuSetup.gs / Settings.html: Removed WooCommerce as the implicit default platform; users must select a platform explicitly before running or viewing credentials.
+- CommonUtilities.gs: Added Gomag defaults for product ID mode.
+- runAllLabelCalculations.gs: Added `Gomag` as a source sheet for Metrics consolidation and skips source rows without a resolved product ID.
+- GoogleAnalyticsData.gs: Fixed GA4 Overview logging by passing the report timeframe into the sheet writer instead of referencing an out-of-scope variable.
+- WooCommerceData.gs: Hardened product and order fetching so non-200 API responses fail/pause the worker instead of being mistaken for the end of pagination.
+- ShopifyData.gs: Limited Shopify order revenue import to paid orders and subtracts line-item discounts when calculating revenue.
+- getWooCommerceCustomers.gs / CommonUtilities.gs: Restored support for reading two-column Config sheets while still preferring Script Properties credentials.
+- Label export: Blank label output mappings now truly disable the output column instead of creating blank-header columns.
+
 2026-03-31
 ----------
 - WooCommerceData.gs: Fixed a ReferenceError in processBatchCore_ where `props` was used instead of `scriptProperties`. This allows the script to correctly pause and save its batch state when approaching the execution time limit without crashing.
