@@ -272,6 +272,12 @@ function executeGomagWriteDataPhase_(config, state, productMap, executionStart, 
   resetGomagScript_();
   props.setProperty('GOMAG_WORKER_STATUS', 'IDLE');
 
+  if (props.getProperty('SKIP_LABELS_ONCE') === 'true') {
+    props.deleteProperty('SKIP_LABELS_ONCE');
+    Logger.log("Skipping Label Calculations because Platform Data Only was requested.");
+    return;
+  }
+
   try {
     Logger.log("Triggering Label Calculations...");
     runAllLabelCalculations();
@@ -485,7 +491,7 @@ function loadGomagConfig_() {
   const idMode = props.getProperty('CFG_GOMAG_ID_MODE') || appConfig.Gomag.ProductIdMode || 'sku';
 
   if (!apiShop || !apiKey) {
-    throw new Error("Missing Gomag Settings! Please configure ApiShop and Apikey in Performance Labels settings.");
+    throw new Error("Missing Gomag settings. Open Performance Labels > Setup Guide and complete ApiShop and Apikey.");
   }
 
   if (!["sku", "product_id", "ean"].includes(idMode)) {

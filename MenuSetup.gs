@@ -23,58 +23,26 @@ function getActivePlatform() {
 
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
-  const platform = getActivePlatform();
 
-  const menu = ui.createMenu('⚡ Performance Labels')
-      .addItem('▶️ Run Now', 'runMainSync')
-      .addItem('📋 Google Ads Script - To Copy', 'showAdsScriptModal')
-      .addSeparator();
-
-
-
-  const devMenu = ui.createMenu('🛠️ Dev');
-  
-  if (platform === 'shopify') {
-    devMenu.addItem('🛍️ Get Shopify Data', 'startShopifyReport');
-  } else if (platform === 'gomag') {
-    devMenu.addItem('Get Gomag Data', 'startGomagReport');
-  } else if (platform === 'ga4') {
-    devMenu.addItem('📈 Get Google Analytics Data', 'runGA4Report');
-  } else if (platform === 'woocommerce') {
-    devMenu.addItem('🛒 Get WooCommerce Data', 'startWooCommerceReport');
-  } else {
-    devMenu.addItem('Configure Platform First', 'showSettingsDialog');
-  }
-  
-  if (platform && platform !== 'ga4') {
-    devMenu.addItem('📈 Get Google Analytics Data', 'runGA4Report');
-  }
-  devMenu.addItem('🏷️ Recalculate Labels', 'runAllLabelCalculations');
-
-  const settingsMenu = ui.createMenu('⚙️ Settings')
-      .addItem('🔑 Update API Settings', 'showSettingsDialog')
-      .addItem('📊 Label & Threshold Settings', 'showLabelSettingsDialog')
-      .addItem('👁️ View Current Credentials', 'viewStoreSettings')
-      .addSeparator();
-
-  if (platform === 'shopify') {
-    settingsMenu.addItem('🕐 Set Up Daily Auto-Fetch (Shopify)', 'setupShopifyComplete');
-  } else if (platform === 'gomag') {
-    settingsMenu.addItem('Set Up Daily Auto-Fetch (Gomag)', 'setupGomagComplete');
-  } else if (platform === 'ga4') {
-    settingsMenu.addItem('Set Up Daily Auto-Fetch (GA4)', 'setupGA4Complete');
-  } else if (platform === 'woocommerce') {
-    settingsMenu.addItem('🕐 Set Up Daily Auto-Fetch (WooCommerce)', 'setupWooCommerceComplete');
-  } else {
-    settingsMenu.addItem('Choose Platform First', 'showSettingsDialog');
-  }
-
-  menu.addSeparator()
-      .addSubMenu(devMenu)
+  const advancedMenu = ui.createMenu('Advanced')
+      .addItem('Platform Data Only', 'runActivePlatformDataOnly')
+      .addItem('GA4 Report Only', 'runGA4Report')
+      .addItem('Recalculate Labels Only', 'runAllLabelCalculations')
       .addSeparator()
-      .addSubMenu(settingsMenu)
+      .addItem('Auto-Fetch Schedule', 'setupActivePlatformAutoFetch')
+      .addItem('Platform Settings', 'showSettingsDialog')
+      .addItem('Label Settings', 'showLabelSettingsDialog')
+      .addItem('Setup Status', 'showSetupGuide')
       .addSeparator()
-      .addItem('📖 Documentation', 'showDocumentation')
+      .addItem('Documentation', 'showDocumentation');
+
+  ui.createMenu('Performance Labels')
+      .addItem('Setup Guide', 'showSetupGuide')
+      .addItem('Run Now', 'runActivePlatformOrSetup')
+      .addItem('Status & Logs', 'openOverviewSheet')
+      .addItem('Google Ads Script', 'showAdsScriptModal')
+      .addSeparator()
+      .addSubMenu(advancedMenu)
       .addToUi();
 }
 
@@ -87,10 +55,37 @@ function onOpen() {
  * Fetches platform data (which then triggers label calculations automatically).
  */
 function runMainSync() {
+  runActivePlatformOrSetup();
+}
+
+function runActivePlatformOrSetup() {
+  const status = getSetupStatus();
+  if (!status.platformConfigured || !status.credentials.done) {
+    showSetupGuide();
+    return;
+  }
+
+  runActivePlatform_(false);
+}
+
+function runActivePlatformDataOnly() {
+  const status = getSetupStatus();
+  if (!status.platformConfigured || !status.credentials.done) {
+    showSetupGuide();
+    return;
+  }
+
+  runActivePlatform_(true);
+}
+
+function runActivePlatform_(skipLabelsOnce) {
   const platform = getActivePlatform();
-  
-  // 1. Start the primary platform fetcher
-  // Both fetchers are designed to trigger runAllLabelCalculations() when finished.
+  const props = PropertiesService.getScriptProperties();
+
+  if (skipLabelsOnce && platform !== 'ga4') {
+    props.setProperty('SKIP_LABELS_ONCE', 'true');
+  }
+
   if (platform === 'shopify') {
     startShopifyReport();
   } else if (platform === 'gomag') {
@@ -100,11 +95,7 @@ function runMainSync() {
   } else if (platform === 'woocommerce') {
     startWooCommerceReport();
   } else {
-    SpreadsheetApp.getUi().alert(
-      'Platform not configured',
-      'Please open Performance Labels > Settings > Update API Settings and select a platform first.',
-      SpreadsheetApp.getUi().ButtonSet.OK
-    );
+    showSetupGuide();
   }
 }
 
@@ -112,13 +103,146 @@ function runMainSync() {
 // Settings Dialog
 // ---------------------------------------------------------------------------
 
+function showSetupGuide() {
+  const html = HtmlService.createHtmlOutputFromFile('SetupGuide')
+      .setTitle('Setup Guide')
+      .setWidth(620)
+      .setHeight(640);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Setup Guide');
+}
+
+function getSetupStatus() {
+  const props = PropertiesService.getScriptProperties();
+  const platform = getActivePlatform();
+  const platformLabels = {
+    woocommerce: 'WooCommerce',
+    shopify: 'Shopify',
+    gomag: 'Gomag',
+    ga4: 'Google Analytics 4'
+  };
+
+  const credentials = getCredentialStatus_(props, platform);
+  const ga4Done = !!props.getProperty('GA4_PROPERTY_ID');
+  const autoFetch = getAutoFetchStatus_(platform);
+
+  return {
+    platform: platform,
+    platformLabel: platformLabels[platform] || 'Not selected',
+    platformConfigured: !!platform,
+    credentials: credentials,
+    ga4: {
+      done: ga4Done,
+      state: ga4Done ? 'Done' : (platform === 'ga4' ? 'Missing' : 'Optional'),
+      detail: ga4Done ? 'GA4 Property ID is saved.' : (platform === 'ga4' ? 'GA4 Property ID is required.' : 'Configure only if you use GA4 reports.')
+    },
+    labels: {
+      done: true,
+      state: 'Done',
+      detail: 'Defaults are ready. Tune labels and thresholds when needed.'
+    },
+    adsScript: {
+      done: false,
+      state: 'Optional',
+      detail: 'Copy the Google Ads script if you want Ads metrics in labels.'
+    },
+    autoFetch: autoFetch
+  };
+}
+
+function getCredentialStatus_(props, platform) {
+  const missing = [];
+  const detailByPlatform = {
+    woocommerce: 'WooCommerce domain, API key, and API secret are required.',
+    shopify: 'Shopify domain, client ID/API key, and client secret are required.',
+    gomag: 'Gomag ApiShop and Apikey are required.',
+    ga4: 'GA4 Property ID is required.'
+  };
+
+  if (!platform) {
+    return {
+      done: false,
+      state: 'Missing',
+      detail: 'Choose a platform to start setup.',
+      missing: ['Platform']
+    };
+  }
+
+  if (platform === 'woocommerce') {
+    if (!props.getProperty('WOOCOMMERCE_DOMAIN')) missing.push('WooCommerce Domain');
+    if (!props.getProperty('WOOCOMMERCE_API_KEY')) missing.push('API Key');
+    if (!props.getProperty('WOOCOMMERCE_API_SECRET')) missing.push('API Secret');
+  } else if (platform === 'shopify') {
+    if (!props.getProperty('SHOPIFY_DOMAIN')) missing.push('Shopify Domain');
+    if (!props.getProperty('SHOPIFY_CLIENT_ID')) missing.push('Client ID / API Key');
+    if (!props.getProperty('SHOPIFY_CLIENT_SECRET')) missing.push('Client Secret');
+  } else if (platform === 'gomag') {
+    if (!props.getProperty('GOMAG_API_SHOP')) missing.push('ApiShop');
+    if (!props.getProperty('GOMAG_API_KEY')) missing.push('Apikey');
+  } else if (platform === 'ga4') {
+    if (!props.getProperty('GA4_PROPERTY_ID')) missing.push('GA4 Property ID');
+  }
+
+  return {
+    done: missing.length === 0,
+    state: missing.length === 0 ? 'Done' : 'Missing',
+    detail: missing.length === 0 ? `${detailByPlatform[platform]} Saved.` : `Missing: ${missing.join(', ')}.`,
+    missing: missing
+  };
+}
+
+function getAutoFetchStatus_(platform) {
+  if (!platform) {
+    return {
+      done: false,
+      state: 'Missing',
+      detail: 'Choose a platform before scheduling auto-fetch.'
+    };
+  }
+
+  const requiredHandlers = {
+    woocommerce: ['startWooCommerceReport', 'processBatchWorker'],
+    shopify: ['startShopifyReport', 'processShopifyWorker'],
+    gomag: ['startGomagReport', 'processGomagWorker'],
+    ga4: ['runGA4Report']
+  }[platform] || [];
+
+  const activeHandlers = ScriptApp.getProjectTriggers().map(trigger => trigger.getHandlerFunction());
+  const missingHandlers = requiredHandlers.filter(handler => activeHandlers.indexOf(handler) === -1);
+
+  return {
+    done: missingHandlers.length === 0,
+    state: missingHandlers.length === 0 ? 'Done' : 'Optional',
+    detail: missingHandlers.length === 0 ? 'Auto-fetch triggers are installed.' : 'Auto-fetch is not scheduled yet.'
+  };
+}
+
+function openOverviewSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = getOrCreateSheet(ss, "Overview");
+  ss.setActiveSheet(sheet);
+}
+
+function setupActivePlatformAutoFetch() {
+  const status = getSetupStatus();
+  if (!status.platformConfigured || !status.credentials.done) {
+    showSetupGuide();
+    return;
+  }
+
+  const platform = status.platform;
+  if (platform === 'woocommerce') setupWooCommerceComplete();
+  else if (platform === 'shopify') setupShopifyComplete();
+  else if (platform === 'gomag') setupGomagComplete();
+  else if (platform === 'ga4') setupGA4Complete();
+}
+
 /**
  * Opens the HTML settings dialog (single screen for platform + all credentials).
  */
 function showSettingsDialog() {
   const html = HtmlService.createHtmlOutputFromFile('Settings')
       .setTitle('Settings')
-      .setWidth(380)
+      .setWidth(520)
       .setHeight(560);
   SpreadsheetApp.getUi().showModalDialog(html, '⚙️ Platform & API Settings');
 }
@@ -318,7 +442,7 @@ function viewStoreSettings() {
   } else {
     ui.alert(
       'Platform not configured',
-      'Please open Performance Labels > Settings > Update API Settings and select a platform first.',
+      'Please open Performance Labels > Setup Guide and select a platform first.',
       ui.ButtonSet.OK
     );
     return;

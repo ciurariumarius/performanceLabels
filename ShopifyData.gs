@@ -373,6 +373,12 @@ function executeShopifyWriteDataPhase_(config, state, productMap, executionStart
   logShopifyStatus_("COMPLETED", "Finished successfully.");
   resetShopifyScript_();
   scriptProperties.setProperty('SHOPIFY_WORKER_STATUS', 'IDLE');
+
+  if (scriptProperties.getProperty('SKIP_LABELS_ONCE') === 'true') {
+    scriptProperties.deleteProperty('SKIP_LABELS_ONCE');
+    Logger.log("Skipping Label Calculations because Platform Data Only was requested.");
+    return;
+  }
   
   // Daisy-chain: Run Label Calculations immediately after data is ready
   try {
@@ -484,7 +490,7 @@ function loadShopifyConfig_(ss) {
 
   if (!domain || !clientId || !clientSecret) {
     console.error(`Config Error: Domain="${domain}", ClientId=${clientId ? "set" : "missing"}, ClientSecret=${clientSecret ? "set" : "missing"}`);
-    throw new Error("Missing Shopify Settings! Please use the 'Performance Labels -> Setup & Fetch -> Set Store Settings' menu in your Sheet.");
+    throw new Error("Missing Shopify settings. Open Performance Labels > Setup Guide and complete Platform and API credentials.");
   }
   
   return { 

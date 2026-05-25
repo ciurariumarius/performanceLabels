@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <base target="_top">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Google Sans', Arial, sans-serif; color: #202124; background: #fff; padding: 20px; font-size: 13px; }
+    .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+    h2 { font-size: 18px; font-weight: 600; color: #1a73e8; margin-bottom: 4px; }
+    .summary { color: #5f6368; line-height: 1.4; }
+    .platform { font-weight: 600; color: #202124; }
+    .actions-top { display: flex; gap: 8px; }
+    .steps { display: flex; flex-direction: column; gap: 10px; }
+    .step { border: 1px solid #dadce0; border-radius: 8px; padding: 14px; background: #fff; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; }
+    .step-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    .step-detail { color: #5f6368; line-height: 1.35; }
+    .badge { display: inline-block; border-radius: 999px; padding: 3px 9px; font-size: 11px; font-weight: 600; margin-bottom: 6px; }
+    .done { background: #e6f4ea; color: #137333; }
+    .missing { background: #fce8e6; color: #a50e0e; }
+    .optional { background: #e8f0fe; color: #174ea6; }
+    button { border: 1px solid #dadce0; background: #fff; color: #1a73e8; border-radius: 4px; padding: 8px 12px; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+    button.primary { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+    button:hover { background: #f1f3f4; }
+    button.primary:hover { background: #1765cc; }
+    #error { color: #c5221f; margin-top: 12px; display: none; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h2>Setup Guide</h2>
+      <div class="summary">Active platform: <span id="platform" class="platform">Loading...</span></div>
+    </div>
+    <div class="actions-top">
+      <button onclick="refresh()">Refresh</button>
+      <button class="primary" onclick="runNow()">Run Now</button>
+    </div>
+  </div>
+
+  <div id="steps" class="steps"></div>
+  <div id="error"></div>
+
+  <script>
+    function badgeClass(state) {
+      if (state === 'Done') return 'done';
+      if (state === 'Missing') return 'missing';
+      return 'optional';
+    }
+
+    function renderStep(title, status, actionLabel, actionName) {
+      return [
+        '<div class="step">',
+        '<div>',
+        '<span class="badge ' + badgeClass(status.state) + '">' + status.state + '</span>',
+        '<div class="step-title">' + title + '</div>',
+        '<div class="step-detail">' + status.detail + '</div>',
+        '</div>',
+        '<button onclick="' + actionName + '()">' + actionLabel + '</button>',
+        '</div>'
+      ].join('');
+    }
+
+    function render(data) {
+      document.getElementById('platform').textContent = data.platformLabel;
+      document.getElementById('steps').innerHTML = [
+        renderStep('1. Platform and API credentials', data.credentials, 'Open Settings', 'openSettings'),
+        renderStep('2. Label and timeframe settings', data.labels, 'Tune Labels', 'openLabelSettings'),
+        renderStep('3. Google Ads script', data.adsScript, 'Copy Script', 'openAdsScript'),
+        renderStep('4. Auto-fetch schedule', data.autoFetch, 'Set Schedule', 'setupSchedule'),
+        renderStep('5. Status and logs', { state: 'Optional', detail: 'Open the Overview sheet to monitor sync status and history.' }, 'Open Overview', 'openOverview')
+      ].join('');
+    }
+
+    function refresh() {
+      document.getElementById('error').style.display = 'none';
+      google.script.run
+        .withSuccessHandler(render)
+        .withFailureHandler(showError)
+        .getSetupStatus();
+    }
+
+    function showError(error) {
+      var el = document.getElementById('error');
+      el.textContent = error.message || String(error);
+      el.style.display = 'block';
+    }
+
+    function openSettings() {
+      google.script.run.showSettingsDialog();
+      google.script.host.close();
+    }
+
+    function openLabelSettings() {
+      google.script.run.showLabelSettingsDialog();
+      google.script.host.close();
+    }
+
+    function openAdsScript() {
+      google.script.run.showAdsScriptModal();
+      google.script.host.close();
+    }
+
+    function setupSchedule() {
+      google.script.run
+        .withSuccessHandler(refresh)
+        .withFailureHandler(showError)
+        .setupActivePlatformAutoFetch();
+    }
+
+    function openOverview() {
+      google.script.run
+        .withFailureHandler(showError)
+        .openOverviewSheet();
+    }
+
+    function runNow() {
+      google.script.run
+        .withSuccessHandler(refresh)
+        .withFailureHandler(showError)
+        .runActivePlatformOrSetup();
+    }
+
+    refresh();
+  </script>
+</body>
+</html>

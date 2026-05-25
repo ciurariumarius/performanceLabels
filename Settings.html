@@ -16,9 +16,9 @@
       transition: border-color .15s;
     }
     input:focus, select:focus { outline: none; border-color: #1a73e8; }
-    .platform-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
+    .platform-toggle { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
     .platform-btn {
-      flex: 1; padding: 8px; border: 2px solid #dadce0; border-radius: 6px;
+      flex: 1 1 calc(50% - 8px); padding: 8px; border: 2px solid #dadce0; border-radius: 6px;
       background: #fff; cursor: pointer; font-size: 13px; font-weight: 500;
       text-align: center; transition: all .15s;
     }

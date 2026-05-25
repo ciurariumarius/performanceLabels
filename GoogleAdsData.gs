@@ -24,7 +24,7 @@ const GADS_SHEET_NAME = "GAds";
 function main() {
   try {
     const ss = SpreadsheetApp.openByUrl(SPREADSHEET_URL);
-    updateDashboardStatus(ss, "Overview", "RUNNING", "Syncing Google Ads data...");
+    updateGoogleAdsDashboardStatus_(ss, "Overview", "RUNNING", "Syncing Google Ads data...");
 
     // 1. Build date range (set GADS_TIMEFRAME_DAYS above to match Config.gs)
     const dateRange = last_n_days(GADS_TIMEFRAME_DAYS);
@@ -81,14 +81,14 @@ function main() {
     const accountName = AdsApp.currentAccount().getName();
 
 
-    updateDashboardMetrics(ss, "Overview", {
+    updateGoogleAdsDashboardMetrics_(ss, "Overview", {
       kind: 'ads',
       rev: totals.convValue.toFixed(2),
       cost: totals.cost.toFixed(2),
       orders: Math.round(totals.conversions)
     });
 
-    appendToOverviewLog(
+    appendGoogleAdsOverviewLog_(
       ss,
       "Overview",
       `Google Ads - ${accountName}`,
@@ -97,19 +97,19 @@ function main() {
       GADS_TIMEFRAME_DAYS
     );
 
-    updateDashboardStatus(ss, "Overview", "COMPLETED", "Google Ads sync finished.");
+    updateGoogleAdsDashboardStatus_(ss, "Overview", "COMPLETED", "Google Ads sync finished.");
     Logger.log("Data sync and logging completed successfully.");
 
   } catch (e) {
     Logger.log(`Error in GoogleAdsData.gs: ${e.message}`);
     try {
       const ssErr = SpreadsheetApp.openByUrl(SPREADSHEET_URL);
-      updateDashboardStatus(ssErr, "Overview", "ERROR", e.message);
+      updateGoogleAdsDashboardStatus_(ssErr, "Overview", "ERROR", e.message);
     } catch(e2) {}
   }
 }
 
-function initializeOverviewDashboard_(sheet) {
+function initializeGoogleAdsOverviewDashboard_(sheet) {
   const topLeft = sheet.getRange("A1").getValue();
   if (topLeft === "LIVE SYSTEM STATUS") return;
 
@@ -145,9 +145,9 @@ function initializeOverviewDashboard_(sheet) {
   sheet.setColumnWidth(5, 120);
 }
 
-function updateDashboardStatus(spreadsheet, sheetName, status, message) {
+function updateGoogleAdsDashboardStatus_(spreadsheet, sheetName, status, message) {
   const sheet = ensureSheetExists(spreadsheet, sheetName);
-  initializeOverviewDashboard_(sheet);
+  initializeGoogleAdsOverviewDashboard_(sheet);
 
   const statusCell = sheet.getRange("B2");
   const timeCell = sheet.getRange("B3");
@@ -167,9 +167,9 @@ function updateDashboardStatus(spreadsheet, sheetName, status, message) {
   timeCell.setValue(message + " (" + timestamp + ")");
 }
 
-function updateDashboardMetrics(spreadsheet, sheetName, totals) {
+function updateGoogleAdsDashboardMetrics_(spreadsheet, sheetName, totals) {
   const sheet = ensureSheetExists(spreadsheet, sheetName);
-  initializeOverviewDashboard_(sheet);
+  initializeGoogleAdsOverviewDashboard_(sheet);
 
   if (totals.kind === 'store') {
     sheet.getRange("B6").setValue(totals.rev);
@@ -184,9 +184,9 @@ function updateDashboardMetrics(spreadsheet, sheetName, totals) {
   }
 }
 
-function appendToOverviewLog(spreadsheet, sheetName, component, status, details, timeframe = "-") {
+function appendGoogleAdsOverviewLog_(spreadsheet, sheetName, component, status, details, timeframe = "-") {
   const sheet = ensureSheetExists(spreadsheet, sheetName);
-  initializeOverviewDashboard_(sheet);
+  initializeGoogleAdsOverviewDashboard_(sheet);
 
   const now = new Date();
   const timestamp = Utilities.formatDate(now, AdsApp.currentAccount().getTimeZone(), "dd/MM/yyyy HH:mm:ss");
@@ -317,5 +317,4 @@ function last_n_days(n) {
   const formattedStartDate = Utilities.formatDate(startDate, AdsApp.currentAccount().getTimeZone(), "yyyyMMdd");
   return `${formattedStartDate},${endDate}`;
 }
-
 

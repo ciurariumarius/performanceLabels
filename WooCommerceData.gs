@@ -366,6 +366,12 @@ function executeWriteDataPhase_(config, state, productMap, executionStart, ss) {
   logStatus_("COMPLETED", `Finished at ${new Date().toLocaleTimeString()}`);
   resetScript_(); // Cleanup
   scriptProperties.setProperty('WOO_WORKER_STATUS', 'IDLE'); 
+
+  if (scriptProperties.getProperty('SKIP_LABELS_ONCE') === 'true') {
+    scriptProperties.deleteProperty('SKIP_LABELS_ONCE');
+    Logger.log("Skipping Label Calculations because Platform Data Only was requested.");
+    return;
+  }
   
   // Daisy-chain: Run Label Calculations immediately after data is ready
   try {
@@ -459,7 +465,7 @@ function loadWooConfig_(ss) {
   const secret = props.getProperty('WOOCOMMERCE_API_SECRET');
 
   if (!shopUrl || !key || !secret) {
-    throw new Error("Missing WooCommerce Settings! Please use the 'Performance Labels -> Setup & Fetch -> Set Store Settings' menu in your Sheet.");
+    throw new Error("Missing WooCommerce settings. Open Performance Labels > Setup Guide and complete Platform and API credentials.");
   }
 
   return {
@@ -468,4 +474,3 @@ function loadWooConfig_(ss) {
     authHeader: { "Authorization": "Basic " + Utilities.base64Encode(key + ":" + secret) }
   };
 }
-

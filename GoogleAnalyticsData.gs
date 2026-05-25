@@ -37,7 +37,7 @@ function runGA4Report() {
     const timeframe = getConfigValue(SCRIPT_CONFIGS, "Timeframe", 'int', 90); // Use general timeframe
 
     if (!propertyId) {
-      throw new Error(`Google Analytics 4 Property ID is not configured. Please add it via the "Dev > Settings" menu.`);
+      throw new Error(`Google Analytics 4 Property ID is not configured. Open Performance Labels > Setup Guide and select GA4.`);
     }
     if (timeframe <= 0) {
       throw new Error(`Configuration "Timeframe" must be a positive number in the Config sheet.`);

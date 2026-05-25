@@ -21,27 +21,28 @@
 
   <h2>1. First-Time Setup</h2>
   <ul>
-    <li>Set your platform in <code>Config.gs</code>: <code>PLATFORM = 'woocommerce'</code> or <code>'shopify'</code></li>
-    <li>Go to <b>⚙️ Settings → 🔑 Update Settings</b> to enter your domain &amp; API credentials</li>
-    <li>Click <b>🕐 Set Up Daily Auto-Fetch</b> to enable automatic daily sync</li>
+    <li>Open <b>Performance Labels → Setup Guide</b></li>
+    <li>Choose your active platform: <b>WooCommerce</b>, <b>Shopify</b>, <b>Gomag</b>, or <b>GA4</b></li>
+    <li>Complete the checklist: platform credentials, label settings, Google Ads script, and auto-fetch schedule</li>
   </ul>
 
   <h2>2. Configuration</h2>
   <ul>
-    <li>All thresholds are in <code>Config.gs</code> (ROAS, revenue, clicks, price intervals…)</li>
-    <li>Map labels to <code>custom_label_0</code>–<code>custom_label_4</code> in <code>FEED_EXPORT_MAPPING</code></li>
+    <li>Use <b>Setup Guide → Tune Labels</b> for ROAS, revenue, clicks, price intervals, timeframe, and ID prefix/suffix settings</li>
+    <li>Advanced users can still edit label defaults and <code>FEED_EXPORT_MAPPING</code> in <code>Config.gs</code></li>
     <li>Set a mapping to <code>""</code> to disable that label calculation entirely</li>
   </ul>
 
   <h2>3. Running Manually</h2>
   <ul>
-    <li><b>▶️ Run All</b> — fetches store data &amp; recalculates all labels in one click</li>
-    <li><b>Fetch [Platform] Data</b> — syncs data only, no label recalculation</li>
+    <li><b>Performance Labels → Run Now</b> — runs the active platform. Store platforms sync data and recalculate labels; GA4 runs the GA4 report only.</li>
+    <li><b>Performance Labels → Status &amp; Logs</b> — opens the <code>Overview</code> sheet</li>
+    <li><b>Performance Labels → Advanced → Platform Data Only</b> — syncs the selected store platform without recalculating labels</li>
   </ul>
 
   <h2>4. Google Ads Setup</h2>
   <ul>
-    <li>Open <code>GoogleAdsData.gs</code> from the GitHub repo</li>
+    <li>Open <b>Performance Labels → Google Ads Script</b> or <code>GoogleAdsData.gs</code> from the GitHub repo</li>
     <li>Go to <b>Google Ads → Tools → Scripts</b> and paste the code</li>
     <li>Set the <code>SPREADSHEET_URL</code> variable to your spreadsheet URL</li>
     <li>Schedule it daily at 4:00 AM (before the 5:00 AM store fetch)</li>
