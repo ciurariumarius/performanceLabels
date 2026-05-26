@@ -5,6 +5,7 @@ const GADS_SHEET_NAME_SOURCE = "GAds";
 const SHOPIFY_SHEET_NAME_SOURCE = "Shopify";
 const WOOCOMMERCE_SHEET_NAME_SOURCE = "WooCommerce";
 const GOMAG_SHEET_NAME_SOURCE = "Gomag";
+const CATALOG_AUDIT_SHEET_NAME = "Catalog_Audit";
 
 const METRICS_HEADERS = [
   "id", "Title", "Date Created", "Price", "Revenue", "Revenue last 14 days", "Orders", "Stock Status", "Stock Qty",
@@ -44,6 +45,8 @@ function runAllLabelCalculations() {
   const allHeaders = ["id"]; 
   const allLabels = rawData.map(row => [row[idIndex]]); // Initialize with IDs
 
+  const calculationErrors = [];
+
   // Helper to aggregate results block by block
   const addResult = (result, name) => {
     if (!result || !result.headers || !result.labels) {
@@ -67,28 +70,46 @@ function runAllLabelCalculations() {
     Logger.log(`Successfully calculated ${name} labels.`);
   };
 
-  try { addResult(runRevenueLabels(rawData, rawHeaders, globalConfig), "Revenue"); } catch(e) { Logger.log("Error in Revenue: " + e.message); }
-  try { addResult(runPriceLabels(rawData, rawHeaders, globalConfig), "Price"); } catch(e) { Logger.log("Error in Price: " + e.message); }
-  try { addResult(runOrdersLabel(rawData, rawHeaders, globalConfig), "Orders"); } catch(e) { Logger.log("Error in Orders: " + e.message); }
-  try { addResult(runAvailableVariantsLabel(rawData, rawHeaders, globalConfig), "Variants"); } catch(e) { Logger.log("Error in Variants: " + e.message); }
-  try { addResult(runPerformanceIndexLabel(rawData, rawHeaders, globalConfig), "Performance"); } catch(e) { Logger.log("Error in Performance: " + e.message); }
-  try { addResult(runTrendLabelCalculation(rawData, rawHeaders, globalConfig), "Trend"); } catch(e) { Logger.log("Error in Trend: " + e.message); }
-  try { addResult(runNewProductLabelCalculation(rawData, rawHeaders, globalConfig), "New Product"); } catch(e) { Logger.log("Error in New Product: " + e.message); }
-  try { addResult(runGoogleAdsLabelCalculation(rawData, rawHeaders, globalConfig), "GAds"); } catch(e) { Logger.log("Error in GAds: " + e.message); }
+  const runCalculation = (name, fn) => {
+    try {
+      addResult(fn(), name);
+    } catch(e) {
+      calculationErrors.push(`${name}: ${e.message}`);
+      Logger.log(`Error in ${name}: ${e.message}`);
+    }
+  };
+
+  runCalculation("Revenue", () => runRevenueLabels(rawData, rawHeaders, globalConfig));
+  runCalculation("Price", () => runPriceLabels(rawData, rawHeaders, globalConfig));
+  runCalculation("Orders", () => runOrdersLabel(rawData, rawHeaders, globalConfig));
+  runCalculation("Variants", () => runAvailableVariantsLabel(rawData, rawHeaders, globalConfig));
+  runCalculation("Performance", () => runPerformanceIndexLabel(rawData, rawHeaders, globalConfig));
+  runCalculation("Trend", () => runTrendLabelCalculation(rawData, rawHeaders, globalConfig));
+  runCalculation("New Product", () => runNewProductLabelCalculation(rawData, rawHeaders, globalConfig));
+  runCalculation("GAds", () => runGoogleAdsLabelCalculation(rawData, rawHeaders, globalConfig));
   
   Logger.log("--- Writing All Labels to Sheet ---");
   const labelsSheet = getOrCreateSheet(ss, LABELS_SHEET_NAME);
   labelsSheet.clear();
   labelsSheet.getRange(1, 1, 1, allHeaders.length).setValues([allHeaders]).setFontWeight("bold");
+  labelsSheet.getRange("A1").setNote(calculationErrors.length > 0
+    ? `Partial label calculation. Errors: ${calculationErrors.join(" | ")}`
+    : "");
   writeValuesToSheetSafe(labelsSheet, 2, 1, allLabels);
   
   Logger.log("--- Synchronizing Secondary Feed ---");
   try { syncSecondaryFeed_(ss); } catch(e) { Logger.log("Error in Feed Sync: " + e.message); }
   
   Logger.log("--- All Tasks Completed ---");
-  try { 
-    updateDashboardStatus(ss, "Overview", "COMPLETED", "All labels calculated."); 
-    appendToOverviewLog(ss, "Overview", "Label Calculations", "SUCCESS", "All labels calculated successfully.", "-");
+  try {
+    if (calculationErrors.length > 0) {
+      const message = `Labels calculated with ${calculationErrors.length} warning(s).`;
+      updateDashboardStatus(ss, "Overview", "PARTIAL", message);
+      appendToOverviewLog(ss, "Overview", "Label Calculations", "PARTIAL", calculationErrors.slice(0, 5).join(" | "), "-");
+    } else {
+      updateDashboardStatus(ss, "Overview", "COMPLETED", "All labels calculated.");
+      appendToOverviewLog(ss, "Overview", "Label Calculations", "SUCCESS", "All labels calculated successfully.", "-");
+    }
   } catch(e) {}
 }
 
@@ -109,6 +130,12 @@ function consolidateMetrics(ss) {
   const sourceData = sourceRows.filter(item => item.id);
   const skippedRows = sourceRows.length - sourceData.length;
   Logger.log(`Source rows loaded: Shopify=${shopifyData.length}, WooCommerce=${wooData.length}, Gomag=${gomagData.length}. Usable IDs=${sourceData.length}, skipped blank IDs=${skippedRows}.`);
+  writeCatalogAudit_(ss, { shopifyData, wooData, gomagData, sourceRows, sourceData });
+  if (skippedRows > 0) {
+    try {
+      appendToOverviewLog(ss, "Overview", "Catalog Audit", "WARNING", `Skipped ${skippedRows} source rows with blank product IDs. See ${CATALOG_AUDIT_SHEET_NAME}.`, "-");
+    } catch(e) {}
+  }
   
   const combinedData = sourceData.map(item => {
     const safeId = String(item.id).toLowerCase();
@@ -193,54 +220,45 @@ function syncSecondaryFeed_(ss) {
 }
 
 function getShopifyData_(sheet) {
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return [];
-  const rawData = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
-  return rawData.map(row => ({
-    id: row[0],
-    title: row[3] + " - " + row[4],
-    dateCreated: row[6],
-    price: row[5],
-    revenue: row[9],
-    revenue14: row[10],
-    orders: row[7],
-    stockStatus: row[11],
-    stockQty: row[12]
-  }));
+  return readStoreSourceRows_(sheet, 'Shopify', {
+    id: 'Product ID',
+    title: ['Product Name', 'Variant Title'],
+    dateCreated: 'Date Created',
+    price: 'Product Price',
+    revenue: 'Total Revenue',
+    revenue14: 'Revenue last 14 days',
+    orders: 'Total Orders',
+    stockStatus: 'Stock Status',
+    stockQty: 'Stock Quantity'
+  });
 }
 
 function getWooData_(sheet) {
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return [];
-  const rawData = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
-  return rawData.map(row => ({
-    id: row[0],
-    title: row[1],
-    dateCreated: row[4],
-    price: row[3],
-    revenue: row[7],
-    revenue14: row[8],
-    orders: row[5],
-    stockStatus: row[9],
-    stockQty: row[10]
-  }));
+  return readStoreSourceRows_(sheet, 'WooCommerce', {
+    id: 'Product ID',
+    title: 'Product Name',
+    dateCreated: 'Date Created',
+    price: 'Product Price',
+    revenue: 'Total Revenue',
+    revenue14: 'Revenue last 14 days',
+    orders: 'Total Orders',
+    stockStatus: 'Stock Status',
+    stockQty: 'Stock Quantity'
+  });
 }
 
 function getGomagData_(sheet) {
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return [];
-  const rawData = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
-  return rawData.map(row => ({
-    id: row[0],
-    title: row[1],
-    dateCreated: row[4],
-    price: row[3],
-    revenue: row[7],
-    revenue14: row[8],
-    orders: row[5],
-    stockStatus: row[9],
-    stockQty: row[10]
-  }));
+  return readStoreSourceRows_(sheet, 'Gomag', {
+    id: 'Product ID',
+    title: 'Product Name',
+    dateCreated: 'Date Created',
+    price: 'Product Price',
+    revenue: 'Total Revenue',
+    revenue14: 'Revenue last 14 days',
+    orders: 'Total Orders',
+    stockStatus: 'Stock Status',
+    stockQty: 'Stock Quantity'
+  });
 }
 
 function loadGAdsDataMap_(sheet) {
@@ -255,7 +273,10 @@ function loadGAdsDataMap_(sheet) {
     val: headers.indexOf("Conv Value")
   };
   
-  if (indices.id === -1) return {};
+  const missing = Object.keys(indices).filter(key => indices[key] === -1);
+  if (missing.length > 0) {
+    throw new Error(`GAds sheet is missing required column(s): ${missing.join(", ")}`);
+  }
   const map = {};
   const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
   data.forEach(row => {
@@ -271,4 +292,118 @@ function loadGAdsDataMap_(sheet) {
     }
   });
   return map;
+}
+
+function readStoreSourceRows_(sheet, sourceName, mapping) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+
+  const lastCol = sheet.getLastColumn();
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(header => String(header || "").trim());
+  const headerMap = {};
+  headers.forEach((header, index) => {
+    if (header) headerMap[header] = index;
+  });
+
+  const requiredHeaders = [];
+  Object.keys(mapping).forEach(key => {
+    const value = mapping[key];
+    if (Array.isArray(value)) requiredHeaders.push(...value);
+    else requiredHeaders.push(value);
+  });
+
+  const missing = requiredHeaders.filter(header => headerMap[header] === undefined);
+  if (missing.length > 0) {
+    throw new Error(`${sourceName} sheet is missing required column(s): ${missing.join(", ")}`);
+  }
+
+  const rawData = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  const get = (row, header) => row[headerMap[header]];
+
+  return rawData.map(row => {
+    const title = Array.isArray(mapping.title)
+      ? mapping.title.map(header => get(row, header)).filter(Boolean).join(" - ")
+      : get(row, mapping.title);
+
+    return {
+      source: sourceName,
+      id: get(row, mapping.id),
+      title: title,
+      dateCreated: get(row, mapping.dateCreated),
+      price: get(row, mapping.price),
+      revenue: get(row, mapping.revenue),
+      revenue14: get(row, mapping.revenue14),
+      orders: get(row, mapping.orders),
+      stockStatus: get(row, mapping.stockStatus),
+      stockQty: get(row, mapping.stockQty)
+    };
+  });
+}
+
+function writeCatalogAudit_(ss, audit) {
+  const sheet = getOrCreateSheet(ss, CATALOG_AUDIT_SHEET_NAME);
+  sheet.clear();
+  const props = PropertiesService.getScriptProperties();
+
+  const now = new Date();
+  const sources = [
+    ['Shopify', audit.shopifyData],
+    ['WooCommerce', audit.wooData],
+    ['Gomag', audit.gomagData]
+  ];
+
+  const summaryHeaders = ['Checked At', 'Source', 'Total Rows', 'Usable IDs', 'Blank IDs', 'Products With Orders', 'Products Without Orders'];
+  const summaryRows = sources.map(([source, rows]) => {
+    const usable = rows.filter(item => item.id).length;
+    const withOrders = rows.filter(item => item.id && parseIntSafe(item.orders, 0) > 0).length;
+    warnOnCatalogDrop_(ss, props, source, usable);
+    return [
+      now,
+      source,
+      rows.length,
+      usable,
+      rows.length - usable,
+      withOrders,
+      usable - withOrders
+    ];
+  });
+
+  sheet.getRange(1, 1, 1, summaryHeaders.length).setValues([summaryHeaders]).setFontWeight("bold");
+  if (summaryRows.length > 0) sheet.getRange(2, 1, summaryRows.length, summaryHeaders.length).setValues(summaryRows);
+
+  const skipped = audit.sourceRows
+    .filter(item => !item.id)
+    .slice(0, 100)
+    .map(item => [
+      item.source || '',
+      item.title || '',
+      item.price || '',
+      item.orders || '',
+      item.stockStatus || ''
+    ]);
+
+  const startRow = summaryRows.length + 4;
+  sheet.getRange(startRow, 1, 1, 5).setValues([['Skipped Blank-ID Samples', 'Title', 'Price', 'Orders', 'Stock Status']]).setFontWeight("bold");
+  if (skipped.length > 0) sheet.getRange(startRow + 1, 1, skipped.length, 5).setValues(skipped);
+  sheet.setFrozenRows(1);
+}
+
+function warnOnCatalogDrop_(ss, props, source, usableCount) {
+  const key = `PL_LAST_USABLE_${String(source || "").toUpperCase()}`;
+  const previous = parseIntSafe(props.getProperty(key), 0);
+
+  if (previous > 0 && usableCount > 0 && usableCount < previous * 0.8) {
+    try {
+      appendToOverviewLog(
+        ss,
+        "Overview",
+        "Catalog Audit",
+        "WARNING",
+        `${source} usable product IDs dropped from ${previous} to ${usableCount}. Check source fetch completeness.`,
+        "-"
+      );
+    } catch(e) {}
+  }
+
+  props.setProperty(key, String(usableCount));
 }

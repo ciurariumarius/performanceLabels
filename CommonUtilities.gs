@@ -472,6 +472,9 @@ function updateDashboardStatus(spreadsheet, sheetName, status, message) {
   } else if (status === "PAUSED") {
     statusText = `🟡 ${status}`;
     color = "#f4b400";
+  } else if (status === "PARTIAL" || status === "WARNING") {
+    statusText = `🟡 ${status}`;
+    color = "#f4b400";
   } else if (status === "COMPLETED") {
     statusText = `🟢 ${status}`;
     color = "#0f9d58";
@@ -506,6 +509,13 @@ function updateDashboardMetrics(spreadsheet, sheetName, totals) {
     sheet.getRange("E7").setValue(totals.cost).setNumberFormat('#,##0.00');
     sheet.getRange("E8").setValue(totals.orders);
   }
+}
+
+function summarizeCatalogRowsForOverview(rows, idIndex, ordersIndex) {
+  const total = rows ? rows.length : 0;
+  const usable = (rows || []).filter(row => row[idIndex]).length;
+  const withOrders = (rows || []).filter(row => row[idIndex] && parseIntSafe(row[ordersIndex], 0) > 0).length;
+  return `Fetched ${total} items. Usable IDs: ${usable}. Blank IDs: ${total - usable}. With orders: ${withOrders}. Without orders: ${usable - withOrders}.`;
 }
 
 /**

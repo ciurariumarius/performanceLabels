@@ -166,13 +166,15 @@ function executeFetchProductsPhase_(config, state, productMap, executionStart) {
 
     const responses = UrlFetchApp.fetchAll(requests);
     let batchHasData = false;
+    let totalPages = state.totalProductPages || 0;
 
-    responses.forEach(res => {
+    responses.forEach((res, index) => {
       const responseCode = res.getResponseCode();
       if (responseCode !== 200) {
         throw new Error(`WooCommerce products API returned ${responseCode}: ${res.getContentText().substring(0, 300)}`);
       }
 
+      totalPages = Math.max(totalPages, getWooTotalPages_(res));
       const products = JSON.parse(res.getContentText());
       if (products.length > 0) {
         batchHasData = true;
@@ -189,9 +191,16 @@ function executeFetchProductsPhase_(config, state, productMap, executionStart) {
       }
     });
 
+    if (totalPages > 0) state.totalProductPages = totalPages;
+
     if (batchHasData) {
       state.page += PARALLEL_REQUESTS;
       logStatus_("RUNNING", `Fetched Products up to Page ${state.page}...`);
+      if (totalPages > 0 && state.page > totalPages) {
+        state.phase = 'FETCH_ORDERS';
+        state.page = 1;
+        hasMore = false;
+      }
     } else {
       state.phase = 'FETCH_ORDERS';
       state.page = 1; 
@@ -223,6 +232,7 @@ function executeFetchOrdersPhase_(config, state, productMap, executionStart) {
 
     const responses = UrlFetchApp.fetchAll(requests);
     let batchHasData = false;
+    let totalPages = state.totalOrderPages || 0;
 
     responses.forEach(res => {
       const responseCode = res.getResponseCode();
@@ -230,6 +240,7 @@ function executeFetchOrdersPhase_(config, state, productMap, executionStart) {
         throw new Error(`WooCommerce orders API returned ${responseCode}: ${res.getContentText().substring(0, 300)}`);
       }
 
+      totalPages = Math.max(totalPages, getWooTotalPages_(res));
       const orders = JSON.parse(res.getContentText());
       if (orders.length > 0) {
         batchHasData = true;
@@ -255,9 +266,16 @@ function executeFetchOrdersPhase_(config, state, productMap, executionStart) {
       }
     });
 
+    if (totalPages > 0) state.totalOrderPages = totalPages;
+
     if (batchHasData) {
       state.page += PARALLEL_REQUESTS;
       logStatus_("RUNNING", `Fetched Orders up to Page ${state.page}...`);
+      if (totalPages > 0 && state.page > totalPages) {
+        state.phase = 'WRITE_DATA';
+        state.writeStartIndex = 0;
+        hasMore = false;
+      }
     } else {
       state.phase = 'WRITE_DATA';
       state.writeStartIndex = 0; // Reset index for the writing phase
@@ -359,7 +377,7 @@ function executeWriteDataPhase_(config, state, productMap, executionStart, ss) {
     WOO_ACCOUNT_SHEET_NAME, 
     `WooCommerce Sync (${config.days}d)`, 
     "SUCCESS", 
-    `Fetched ${allProducts.length} items`,
+    summarizeCatalogRowsForOverview(rows, 0, 5),
     config.days
   );
 
@@ -414,6 +432,12 @@ function resetScript_() {
  */
 function isTimeUp_(startTime) {
   return (new Date().getTime() - startTime) > MAX_EXECUTION_TIME_MS;
+}
+
+function getWooTotalPages_(response) {
+  const headers = response.getHeaders();
+  const value = headers['X-WP-TotalPages'] || headers['x-wp-totalpages'] || headers['X-WP-Totalpages'];
+  return parseIntSafe(value, 0);
 }
 
 /**

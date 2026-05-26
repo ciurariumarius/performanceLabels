@@ -29,12 +29,12 @@ function onOpen() {
       .addSeparator()
       .addItem('Label Settings', 'showLabelSettingsDialog')
       .addItem('Platform Settings', 'showSettingsDialog')
-      .addItem('Auto-Fetch Setup', 'setupActivePlatformAutoFetch')
-      .addItem('Documentation', 'showDocumentation');
+      .addItem('Auto-Fetch Setup', 'setupActivePlatformAutoFetch');
 
   ui.createMenu('Performance Labels')
       .addItem('Setup Script', 'showSetupGuide')
       .addItem('Google Ads Script [To Copy]', 'showAdsScriptModal')
+      .addItem('Documentation', 'showDocumentation')
       .addSeparator()
       .addSubMenu(settingsMenu)
       .addToUi();

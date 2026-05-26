@@ -24,13 +24,17 @@ CHANGELOG
 - GomagData.gs: Reads Gomag `Api-RateLimit-Read-*` headers and throttles requests when read capacity is low.
 - GomagData.gs: Makes order item processing resumable within a page, resets per-tick lookup counters on each worker run, and caps individual product lookups at 80 per tick to stay inside Apps Script time limits.
 - MenuSetup.gs / TriggerSetup.gs: `Run Now` now ensures the active store platform worker trigger exists, so manual runs can continue after Apps Script pauses without requiring Auto-Fetch Schedule first.
-- MenuSetup.gs: Simplified the main menu to `Setup Script`, `Google Ads Script [To Copy]`, and a `Settings` submenu for run now, label settings, platform settings, auto-fetch setup, and documentation.
+- MenuSetup.gs: Simplified the main menu to `Setup Script`, `Google Ads Script [To Copy]`, `Documentation`, and a `Settings` submenu for run now, label settings, platform settings, and auto-fetch setup.
+- README.html: Updated documentation to match the current menu, setup flow, auto-fetch behavior, Google Ads script scheduling, generated sheets, and feed publishing steps.
 - SetupGuide.html: Removed the `Status and logs` step and hides `Optional` badges so the guide stays focused on setup actions.
 - SetupGuide.html: Replaced the unclear top buttons with a single `Check Status` action and moved manual runs to Settings > Run Now.
 - TriggerSetup.gs / MenuSetup.gs: Centralized platform trigger scheduling so Auto-Fetch Setup is idempotent, repairs stale or duplicate triggers, and distinguishes Scheduled, Manual worker only, Needs cleanup, and Not scheduled states.
 - Settings.html / LabelSettings.html: Moved Shopify Product ID Format and Country Code out of Label Settings and into the Shopify platform setup section.
 - Settings.html: Redesigned the platform selector as clearer platform cards with distinct icons, descriptions, hover state, and stronger selected styling.
 - AdsScriptModal.html: Added daily scheduling guidance for the copied Google Ads Script, recommending 4:00 AM before the Sheets store auto-fetch.
+- runAllLabelCalculations.gs: Reads store source sheets by header name, writes `Catalog_Audit`, warns on blank product IDs, fails loudly on missing required source/GAds columns, and marks partial label runs in Overview/feed notes.
+- GomagData.gs / WooCommerceData.gs: Use API pagination metadata when available and add richer catalog completeness counts to sync logs.
+- ShopifyData.gs / WooCommerceData.gs / GomagData.gs: Store sync logs now report usable IDs, blank IDs, products with orders, and products without orders.
 - AdsScriptModal.html / MenuSetup.gs: Renders Google Ads copy code via JSON + `textContent` so the modal cannot fail on script-like HTML content.
 - CommonUtilities.gs: Added Gomag defaults for product ID mode.
 - runAllLabelCalculations.gs: Added `Gomag` as a source sheet for Metrics consolidation and skips source rows without a resolved product ID.

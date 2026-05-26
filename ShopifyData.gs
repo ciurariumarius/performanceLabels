@@ -366,7 +366,7 @@ function executeShopifyWriteDataPhase_(config, state, productMap, executionStart
     SHOPIFY_ACCOUNT_SHEET_NAME, 
     `Shopify Sync (${config.days}d)`, 
     "SUCCESS", 
-    `Fetched ${Object.keys(productMap).length} items`,
+    summarizeCatalogRowsForOverview(rows, 0, 7),
     config.days
   );
 

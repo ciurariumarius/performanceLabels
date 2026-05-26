@@ -161,7 +161,7 @@ function executeGomagFetchProductsPhase_(config, state, productMap, executionSta
 
     logGomagStatus_("RUNNING", `Fetched Gomag products page ${state.page}: ${products.length} items.`);
 
-    if (products.length < GOMAG_PAGE_SIZE) {
+    if (isGomagLastPage_(response, state.page, products.length)) {
       state.phase = 'FETCH_ORDERS';
       state.page = 1;
       return;
@@ -199,7 +199,7 @@ function executeGomagFetchOrdersPhase_(config, state, productMap, executionStart
     state.currentOrderItemIndex = 0;
     state.productLookupsThisTick = 0;
 
-    if (orders.length < GOMAG_PAGE_SIZE) {
+    if (isGomagLastPage_(response, state.page, orders.length)) {
       state.phase = 'WRITE_DATA';
       state.writeStartIndex = 0;
       return;
@@ -289,7 +289,7 @@ function executeGomagWriteDataPhase_(config, state, productMap, executionStart, 
     GOMAG_ACCOUNT_SHEET_NAME,
     `Gomag Sync (${config.days}d)`,
     "SUCCESS",
-    `Fetched ${allProducts.length} items. Fetched individually: ${state.productsFetchedByOrder || 0}. Unmatched order items: ${state.unmatchedOrderItems || 0}`,
+    `${summarizeCatalogRowsForOverview(rows, 0, 5)} Fetched individually: ${state.productsFetchedByOrder || 0}. Unmatched order items: ${state.unmatchedOrderItems || 0}`,
     config.days
   );
 
@@ -745,6 +745,16 @@ function extractGomagItems_(response, preferredKeys) {
   }
 
   return [];
+}
+
+function isGomagLastPage_(response, currentPage, itemCount) {
+  const pages = parseIntSafe(firstDefinedGomag_(response && response.pages, response && response.totalPages, ""), NaN);
+  if (!isNaN(pages) && pages > 0) return currentPage >= pages;
+
+  const total = parseIntSafe(firstDefinedGomag_(response && response.total, response && response.totalItems, ""), NaN);
+  if (!isNaN(total) && total >= 0) return currentPage * GOMAG_PAGE_SIZE >= total;
+
+  return itemCount < GOMAG_PAGE_SIZE;
 }
 
 function extractNestedGomagCollection_(value, preferredKeys) {

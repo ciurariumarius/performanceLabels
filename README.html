@@ -4,65 +4,80 @@
   <meta charset="UTF-8">
   <base target="_top">
   <style>
-    body { font-family: Arial, sans-serif; font-size: 13px; padding: 16px; line-height: 1.6; color: #202124; }
-    h1 { font-size: 15px; color: #1a73e8; margin-bottom: 4px; }
+    body { font-family: Arial, sans-serif; font-size: 13px; padding: 16px; line-height: 1.55; color: #202124; }
+    h1 { font-size: 16px; color: #1a73e8; margin: 0 0 4px; }
     .subtitle { font-size: 11px; color: #80868b; margin-bottom: 16px; }
     h2 { font-size: 13px; font-weight: 600; color: #3c4043; margin: 16px 0 4px; border-bottom: 1px solid #e8eaed; padding-bottom: 3px; }
     ul { padding-left: 18px; margin: 4px 0; }
-    li { margin-bottom: 3px; }
+    li { margin-bottom: 4px; }
     code { background: #f1f3f4; padding: 1px 5px; border-radius: 3px; font-size: 11px; }
     .note { background: #e8f0fe; border-left: 3px solid #1a73e8; padding: 8px 12px; border-radius: 0 4px 4px 0; margin: 12px 0; font-size: 12px; }
     .warn { background: #fce8e6; border-left: 3px solid #d93025; padding: 8px 12px; border-radius: 0 4px 4px 0; margin: 12px 0; font-size: 12px; }
   </style>
 </head>
 <body>
-  <h1>⚡ Performance Labels</h1>
-  <div class="subtitle">Automated Product Segmentation for Google Merchant Center &amp; Meta</div>
+  <h1>Performance Labels</h1>
+  <div class="subtitle">Automated product labels for Google Merchant Center and ad reporting.</div>
 
-  <h2>1. First-Time Setup</h2>
+  <h2>1. Main Menu</h2>
   <ul>
-    <li>Open <b>Performance Labels → Setup Guide</b></li>
-    <li>Choose your active platform: <b>WooCommerce</b>, <b>Shopify</b>, <b>Gomag</b>, or <b>GA4</b></li>
-    <li>Complete the checklist: platform credentials, label settings, Google Ads script, and auto-fetch schedule</li>
+    <li><b>Setup Script</b>: checklist for platform credentials, label settings, Google Ads script, and auto-fetch status.</li>
+    <li><b>Google Ads Script [To Copy]</b>: opens the script that must be copied into Google Ads Scripts.</li>
+    <li><b>Documentation</b>: opens this guide.</li>
+    <li><b>Settings</b>: admin tools for Run Now, label settings, platform settings, and auto-fetch setup.</li>
   </ul>
 
-  <h2>2. Configuration</h2>
+  <h2>2. First-Time Setup</h2>
   <ul>
-    <li>Use <b>Setup Guide → Tune Labels</b> for ROAS, revenue, clicks, price intervals, timeframe, and ID prefix/suffix settings</li>
-    <li>Advanced users can still edit label defaults and <code>FEED_EXPORT_MAPPING</code> in <code>Config.gs</code></li>
-    <li>Set a mapping to <code>""</code> to disable that label calculation entirely</li>
+    <li>Open <b>Performance Labels -> Setup Script</b>.</li>
+    <li>Choose your platform in <b>Platform Settings</b>: WooCommerce, Shopify, Gomag, or GA4.</li>
+    <li>Save the required credentials for the selected platform.</li>
+    <li>Open <b>Label Settings</b> and review timeframe, thresholds, and output labels.</li>
+    <li>Open <b>Auto-Fetch Setup</b> once to install the daily schedule for the active platform.</li>
   </ul>
 
-  <h2>3. Running Manually</h2>
+  <h2>3. Platform Settings</h2>
   <ul>
-    <li><b>Performance Labels → Run Now</b> — runs the active platform. Store platforms sync data and recalculate labels; GA4 runs the GA4 report only.</li>
-    <li><b>Performance Labels → Status &amp; Logs</b> — opens the <code>Overview</code> sheet</li>
-    <li><b>Performance Labels → Advanced → Platform Data Only</b> — syncs the selected store platform without recalculating labels</li>
+    <li><b>WooCommerce</b>: store domain, API key, and API secret.</li>
+    <li><b>Shopify</b>: domain, client credentials, Product ID Format, and Shopify Country Code.</li>
+    <li><b>Gomag</b>: ApiShop, Apikey, and Output Product ID Mode for Merchant/Ads matching.</li>
+    <li><b>GA4</b>: GA4 Property ID only.</li>
   </ul>
 
-  <h2>4. Google Ads Setup</h2>
+  <h2>4. Auto-Fetch and Run Now</h2>
   <ul>
-    <li>Open <b>Performance Labels → Google Ads Script [To Copy]</b> or <code>GoogleAdsData.html</code> from the GitHub repo</li>
-    <li>Go to <b>Google Ads → Tools → Scripts</b> and paste the code</li>
-    <li>Set the <code>SPREADSHEET_URL</code> variable to your spreadsheet URL</li>
-    <li>Schedule it daily at 4:00 AM (before the 5:00 AM store fetch)</li>
-  </ul>
-  <div class="warn">⚠️ Do <b>not</b> paste the Google Ads script into this Sheet Script Editor — it belongs in Google Ads Scripts only.</div>
-
-  <h2>5. Publishing the Feed (Google Merchant Center)</h2>
-  <ul>
-    <li>In your Spreadsheet: <b>File → Share → Publish to web</b></li>
-    <li>Select the <code>GMC_Feed</code> tab → format: <b>Comma-separated values (.csv)</b> → Publish</li>
-    <li>Paste the generated URL into Google Merchant Center as your scheduled fetch URL</li>
+    <li><b>Settings -> Auto-Fetch Setup</b> installs or repairs the active platform schedule.</li>
+    <li>Auto-fetch is single-platform: changing platform and running setup removes stale platform triggers.</li>
+    <li><b>Settings -> Run Now</b> is for initial runs or testing. It starts the active platform and installs only the needed worker continuation trigger.</li>
+    <li>Store platforms sync products/orders and then recalculate labels. GA4 runs only the GA4 report.</li>
   </ul>
 
-  <h2>6. Facebook / Meta Feed</h2>
+  <h2>5. Google Ads Script</h2>
   <ul>
-    <li>A second tab <code>GMC_Feed_2</code> is auto-generated when <code>ID_PREFIX</code> or <code>ID_SUFFIX</code> is set in <code>Config.gs</code></li>
-    <li>Example: <code>ID_PREFIX = "wc_post_id_"</code> produces IDs like <code>wc_post_id_12345</code></li>
-    <li>Publish <code>GMC_Feed_2</code> as CSV and use that URL in Meta Commerce Manager</li>
+    <li>Open <b>Performance Labels -> Google Ads Script [To Copy]</b>.</li>
+    <li>Copy the code and paste it in <b>Google Ads -> Tools &amp; Settings -> Scripts</b>.</li>
+    <li>Set the <code>SPREADSHEET_URL</code> variable to this spreadsheet URL.</li>
+    <li>Authorize, run once, then schedule it <b>Daily at 4:00 AM</b>, before the Sheets store auto-fetch.</li>
+  </ul>
+  <div class="warn">Do not paste the Google Ads script into this Sheet Script Editor. It belongs only in Google Ads Scripts.</div>
+
+  <h2>6. Generated Sheets</h2>
+  <ul>
+    <li><code>Overview</code>: live status, sync logs, and error messages.</li>
+    <li><code>GAds</code>: Google Ads metrics imported by the Google Ads script.</li>
+    <li><code>WooCommerce</code>, <code>Shopify</code>, or <code>Gomag</code>: source store data.</li>
+    <li><code>Metrics</code>: consolidated source data plus Google Ads metrics.</li>
+    <li><code>GMC_Feed</code>: final supplemental feed with product IDs and labels.</li>
+    <li><code>GMC_Feed_2</code>: optional secondary feed when prefix or suffix is configured.</li>
   </ul>
 
-  <div class="note">💡 <b>API Keys</b> are stored securely in Google Script Properties — never in the code or spreadsheet.</div>
+  <h2>7. Publishing the Feed</h2>
+  <ul>
+    <li>In Google Sheets, open <b>File -> Share -> Publish to web</b>.</li>
+    <li>Select <code>GMC_Feed</code> and format <b>Comma-separated values (.csv)</b>.</li>
+    <li>Use the published CSV URL as a supplemental feed in Google Merchant Center.</li>
+  </ul>
+
+  <div class="note"><b>Note:</b> API keys are stored in Google Script Properties, not in the spreadsheet cells.</div>
 </body>
 </html>
