@@ -13,6 +13,7 @@ const GOMAG_MAX_EXECUTION_TIME_MS = 1000 * 60 * 4;
 const GOMAG_PAGE_SIZE = 100;
 const GOMAG_API_BASE_URL = "https://api.gomag.ro/api/v1";
 const GOMAG_USER_AGENT = "PerformanceLabels-GoogleAppsScript/1.0";
+const GOMAG_MIN_READ_REMAINING = 1;
 
 const GOMAG_HEADERS = [
   "Product ID", "Product Name", "Product Category", "Product Price", "Date Created",
@@ -180,7 +181,7 @@ function executeGomagFetchOrdersPhase_(config, state, productMap, executionStart
     const orders = extractGomagItems_(response, ['orders', 'data', 'items']);
 
     orders.forEach(order => {
-      processGomagOrder_(order, productMap, state, day14);
+      processGomagOrder_(order, productMap, state, config, day14);
     });
 
     logGomagStatus_("RUNNING", `Fetched Gomag orders page ${state.page}: ${orders.length} orders.`);
@@ -275,7 +276,7 @@ function executeGomagWriteDataPhase_(config, state, productMap, executionStart, 
     GOMAG_ACCOUNT_SHEET_NAME,
     `Gomag Sync (${config.days}d)`,
     "SUCCESS",
-    `Fetched ${allProducts.length} items. Unmatched order items: ${state.unmatchedOrderItems || 0}`,
+    `Fetched ${allProducts.length} items. Fetched individually: ${state.productsFetchedByOrder || 0}. Unmatched order items: ${state.unmatchedOrderItems || 0}`,
     config.days
   );
 
@@ -367,7 +368,7 @@ function normalizeGomagProduct_(product, version, config) {
   };
 }
 
-function processGomagOrder_(order, productMap, state, day14) {
+function processGomagOrder_(order, productMap, state, config, day14) {
   state.uniqueOrdersCount++;
   const orderDate = parseGomagDate_(firstDefinedGomag_(order.date, order.created_at, order.created, order.dateCreated, ""));
   const products = Array.isArray(order.products) && order.products.length > 0
@@ -379,12 +380,17 @@ function processGomagOrder_(order, productMap, state, day14) {
         : normalizeGomagCollection_(firstDefinedGomag_(order.items, order.products, order.line_items, []))));
 
   products.forEach(item => {
-    const product = findGomagProductForOrderItem_(item, productMap);
+    let product = findGomagProductForOrderItem_(item, productMap);
 
     if (!product) {
-      state.unmatchedOrderItems = (state.unmatchedOrderItems || 0) + 1;
-      collectGomagUnmatchedOrderSample_(state, order, item);
-      return;
+      product = fetchAndIndexGomagProductForOrderItem_(item, productMap, state, config);
+      if (product) {
+        state.productsFetchedByOrder = (state.productsFetchedByOrder || 0) + 1;
+      } else {
+        state.unmatchedOrderItems = (state.unmatchedOrderItems || 0) + 1;
+        collectGomagUnmatchedOrderSample_(state, order, item);
+        return;
+      }
     }
 
     const qty = parseIntSafe(firstDefinedGomag_(item.quantity, item.qty, 0), 0);
@@ -400,6 +406,35 @@ function processGomagOrder_(order, productMap, state, day14) {
       product.rev14 += lineRevenue;
     }
   });
+}
+
+function fetchAndIndexGomagProductForOrderItem_(item, productMap, state, config) {
+  const internalId = resolveGomagOrderInternalId_(item);
+  const sku = String(firstDefinedGomag_(item.sku, item.SKU, item.product_sku, item.productSku, item.code, "") || "").trim();
+  const lookupKey = internalId ? `id:${internalId}` : (sku ? `sku:${sku}` : "");
+  if (!lookupKey) return null;
+
+  state.gomagProductLookupMisses = state.gomagProductLookupMisses || {};
+  if (state.gomagProductLookupMisses[lookupKey]) return null;
+
+  const query = internalId
+    ? `id=${encodeURIComponent(internalId)}`
+    : `sku=${encodeURIComponent(sku)}`;
+  const endpoint = `${GOMAG_API_BASE_URL}/product/read/json?${query}&addVersions=true&limit=${GOMAG_PAGE_SIZE}`;
+
+  try {
+    const response = fetchGomagJson_(endpoint, config);
+    const products = extractGomagItems_(response, ['products', 'data', 'items']);
+    products.forEach(product => addGomagProductToMap_(productMap, product, config));
+
+    const product = findGomagProductForOrderItem_(item, productMap);
+    if (product) return product;
+  } catch (e) {
+    console.warn(`Failed to fetch Gomag product for order item ${lookupKey}: ${e.message}`);
+  }
+
+  state.gomagProductLookupMisses[lookupKey] = true;
+  return null;
 }
 
 function findGomagProductForOrderItem_(item, productMap) {
@@ -501,19 +536,23 @@ function fetchGomagJson_(endpoint, config, retries = 3) {
       const response = UrlFetchApp.fetch(endpoint, options);
       const code = response.getResponseCode();
       const body = response.getContentText();
+      const headers = normalizeGomagHeaders_(response.getHeaders());
+      const rateLimit = getGomagReadRateLimit_(headers);
 
       if (code >= 200 && code < 300) {
         const parsed = JSON.parse(body);
         throwIfGomagApiError_(parsed);
+        throttleGomagReadRate_(rateLimit);
         return parsed;
       }
 
       if (i < retries - 1 && (code === 429 || code >= 500)) {
-        Utilities.sleep(1000 * Math.pow(2, i));
+        throttleGomagReadRate_(rateLimit, true);
+        if (code !== 429) Utilities.sleep(1000 * Math.pow(2, i));
         continue;
       }
 
-      throw new Error(`Gomag API returned ${code}: ${body.substring(0, 300)}`);
+      throw new Error(`Gomag API returned ${code}${formatGomagRateLimit_(rateLimit)}: ${body.substring(0, 300)}`);
     } catch (e) {
       if (i === retries - 1) throw e;
       Utilities.sleep(1000 * Math.pow(2, i));
@@ -521,6 +560,43 @@ function fetchGomagJson_(endpoint, config, retries = 3) {
   }
 
   throw new Error(`Failed to fetch Gomag endpoint: ${endpoint}`);
+}
+
+function normalizeGomagHeaders_(headers) {
+  const normalized = {};
+  Object.keys(headers || {}).forEach(key => {
+    normalized[String(key).toLowerCase()] = headers[key];
+  });
+  return normalized;
+}
+
+function getGomagReadRateLimit_(headers) {
+  return {
+    read: parseFloatSafe(headers['api-ratelimit-read'], NaN),
+    burst: parseIntSafe(headers['api-ratelimit-read-burst'], NaN),
+    remaining: parseIntSafe(headers['api-ratelimit-read-remaining'], NaN)
+  };
+}
+
+function throttleGomagReadRate_(rateLimit, forceWait) {
+  const remaining = rateLimit ? rateLimit.remaining : NaN;
+  const readRate = rateLimit ? rateLimit.read : NaN;
+  const shouldWait = forceWait || (!isNaN(remaining) && remaining <= GOMAG_MIN_READ_REMAINING);
+  if (!shouldWait) return;
+
+  const waitMs = !isNaN(readRate) && readRate > 0
+    ? Math.ceil(1000 / readRate)
+    : 1000;
+  Utilities.sleep(Math.min(Math.max(waitMs, 1000), 10000));
+}
+
+function formatGomagRateLimit_(rateLimit) {
+  if (!rateLimit) return "";
+  const parts = [];
+  if (!isNaN(rateLimit.read)) parts.push(`read=${rateLimit.read}/s`);
+  if (!isNaN(rateLimit.burst)) parts.push(`burst=${rateLimit.burst}`);
+  if (!isNaN(rateLimit.remaining)) parts.push(`remaining=${rateLimit.remaining}`);
+  return parts.length ? ` (${parts.join(", ")})` : "";
 }
 
 function throwIfGomagApiError_(response) {
