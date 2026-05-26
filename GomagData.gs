@@ -198,6 +198,7 @@ function executeGomagFetchOrdersPhase_(config, state, productMap, executionStart
 function executeGomagWriteDataPhase_(config, state, productMap, executionStart, ss) {
   const props = PropertiesService.getScriptProperties();
   const sheet = getOrCreateSheet(ss, GOMAG_DATA_SHEET_NAME);
+  const products = getUniqueGomagProducts_(productMap);
 
   if (state.writeStartIndex === 0) {
     sheet.clear();
@@ -207,7 +208,7 @@ function executeGomagWriteDataPhase_(config, state, productMap, executionStart, 
       .setHorizontalAlignment("center");
   }
 
-  const rows = Object.values(productMap).map(p => [
+  const rows = products.map(p => [
     p.id, p.name, p.category, p.price, p.dateCreated,
     p.orders, p.sold, p.rev, p.rev14, p.stockStatus, p.stockQty,
     p.internalId, p.sku, p.ean
@@ -243,7 +244,7 @@ function executeGomagWriteDataPhase_(config, state, productMap, executionStart, 
     }
   }
 
-  const allProducts = Object.values(productMap);
+  const allProducts = products;
   let oosWithSalesCount = 0;
   let totalWithSalesCount = 0;
 
@@ -307,8 +308,37 @@ function addGomagProductToMap_(productMap, product, config) {
 
   versions.forEach(version => {
     const productData = normalizeGomagProduct_(product, version, config);
-    const mapKey = productData.internalId || productData.sku || productData.ean || `missing_id_${productData.id || ""}`;
-    productMap[mapKey] = productData;
+    indexGomagProduct_(productMap, productData);
+  });
+}
+
+function indexGomagProduct_(productMap, productData) {
+  if (!productData._canonicalKey) {
+    productData._canonicalKey = `product_${Object.keys(productMap).length}_${productData.internalId || productData.sku || productData.ean || productData.id || ""}`;
+  }
+
+  const keys = [
+    productData._canonicalKey,
+    productData.internalId,
+    productData.sku,
+    productData.ean,
+    productData.id
+  ]
+    .map(value => String(value || "").trim())
+    .filter(Boolean);
+
+  keys.forEach(key => {
+    productMap[key] = productData;
+  });
+}
+
+function getUniqueGomagProducts_(productMap) {
+  const seen = {};
+  return Object.values(productMap).filter(product => {
+    const key = product._canonicalKey || product.internalId || product.sku || product.ean || product.id || JSON.stringify(product);
+    if (seen[key]) return false;
+    seen[key] = true;
+    return true;
   });
 }
 
@@ -380,12 +410,10 @@ function findGomagProductForOrderItem_(item, productMap) {
   const ean = String(firstDefinedGomag_(item.ean, item.EAN, item.product_ean, item.productEan, "") || "").trim();
   const outputId = String(firstDefinedGomag_(item.id, item.product_id, item.productId, "") || "").trim();
 
-  const products = Object.values(productMap);
-  return products.find(product =>
-    (sku && String(product.sku || "") === sku) ||
-    (ean && String(product.ean || "") === ean) ||
-    (outputId && String(product.id || "") === outputId)
-  ) || null;
+  return (sku && productMap[sku]) ||
+    (ean && productMap[ean]) ||
+    (outputId && productMap[outputId]) ||
+    null;
 }
 
 function collectGomagUnmatchedOrderSample_(state, order, item) {
