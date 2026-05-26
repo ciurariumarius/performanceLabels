@@ -22,6 +22,7 @@ const GOMAG_HEADERS = [
 ];
 
 const GOMAG_MAX_UNMATCHED_SAMPLES = 25;
+const GOMAG_MAX_ORDER_PRODUCT_LOOKUPS_PER_TICK = 80;
 
 function startGomagReport() {
   const lock = LockService.getScriptLock();
@@ -44,6 +45,9 @@ function startGomagReport() {
       totalItemsSold: 0,
       unmatchedOrderItems: 0,
       unmatchedOrderSamples: [],
+      currentOrderIndex: 0,
+      currentOrderItemIndex: 0,
+      productLookupsThisTick: 0,
       status: "Starting..."
     };
 
@@ -101,6 +105,8 @@ function processGomagBatchCore_() {
   }
 
   try {
+    state.productLookupsThisTick = 0;
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const config = loadGomagConfig_();
     productMap = loadGomagDataFromDrive_();
@@ -180,11 +186,18 @@ function executeGomagFetchOrdersPhase_(config, state, productMap, executionStart
     const response = fetchGomagJson_(endpoint, config);
     const orders = extractGomagItems_(response, ['orders', 'data', 'items']);
 
-    orders.forEach(order => {
-      processGomagOrder_(order, productMap, state, config, day14);
-    });
+    const completedPage = processGomagOrdersPage_(orders, productMap, state, config, day14, executionStart);
 
     logGomagStatus_("RUNNING", `Fetched Gomag orders page ${state.page}: ${orders.length} orders.`);
+
+    if (!completedPage) {
+      logGomagStatus_("PAUSED", `Paused orders page ${state.page} at order ${state.currentOrderIndex || 0}.`);
+      return;
+    }
+
+    state.currentOrderIndex = 0;
+    state.currentOrderItemIndex = 0;
+    state.productLookupsThisTick = 0;
 
     if (orders.length < GOMAG_PAGE_SIZE) {
       state.phase = 'WRITE_DATA';
@@ -368,8 +381,25 @@ function normalizeGomagProduct_(product, version, config) {
   };
 }
 
-function processGomagOrder_(order, productMap, state, config, day14) {
-  state.uniqueOrdersCount++;
+function processGomagOrdersPage_(orders, productMap, state, config, day14, executionStart) {
+  const startOrderIndex = parseIntSafe(state.currentOrderIndex, 0);
+
+  for (let orderIndex = startOrderIndex; orderIndex < orders.length; orderIndex++) {
+    const completedOrder = processGomagOrder_(orders[orderIndex], productMap, state, config, day14, executionStart, orderIndex);
+    if (!completedOrder) return false;
+
+    state.currentOrderIndex = orderIndex + 1;
+    state.currentOrderItemIndex = 0;
+  }
+
+  return true;
+}
+
+function processGomagOrder_(order, productMap, state, config, day14, executionStart, orderIndex) {
+  if (parseIntSafe(state.currentOrderItemIndex, 0) === 0) {
+    state.uniqueOrdersCount++;
+  }
+
   const orderDate = parseGomagDate_(firstDefinedGomag_(order.date, order.created_at, order.created, order.dateCreated, ""));
   const products = Array.isArray(order.products) && order.products.length > 0
     ? order.products
@@ -379,17 +409,34 @@ function processGomagOrder_(order, productMap, state, config, day14) {
         ? order.line_items
         : normalizeGomagCollection_(firstDefinedGomag_(order.items, order.products, order.line_items, []))));
 
-  products.forEach(item => {
+  const startItemIndex = parseIntSafe(state.currentOrderItemIndex, 0);
+
+  for (let itemIndex = startItemIndex; itemIndex < products.length; itemIndex++) {
+    if (isGomagTimeUp_(executionStart)) {
+      state.currentOrderIndex = orderIndex;
+      state.currentOrderItemIndex = itemIndex;
+      return false;
+    }
+
+    const item = products[itemIndex];
     let product = findGomagProductForOrderItem_(item, productMap);
 
     if (!product) {
+      if ((state.productLookupsThisTick || 0) >= GOMAG_MAX_ORDER_PRODUCT_LOOKUPS_PER_TICK) {
+        state.currentOrderIndex = orderIndex;
+        state.currentOrderItemIndex = itemIndex;
+        return false;
+      }
+
       product = fetchAndIndexGomagProductForOrderItem_(item, productMap, state, config);
+      state.productLookupsThisTick = (state.productLookupsThisTick || 0) + 1;
+
       if (product) {
         state.productsFetchedByOrder = (state.productsFetchedByOrder || 0) + 1;
       } else {
         state.unmatchedOrderItems = (state.unmatchedOrderItems || 0) + 1;
         collectGomagUnmatchedOrderSample_(state, order, item);
-        return;
+        continue;
       }
     }
 
@@ -405,7 +452,9 @@ function processGomagOrder_(order, productMap, state, config, day14) {
     if (orderDate && orderDate >= day14) {
       product.rev14 += lineRevenue;
     }
-  });
+  }
+
+  return true;
 }
 
 function fetchAndIndexGomagProductForOrderItem_(item, productMap, state, config) {

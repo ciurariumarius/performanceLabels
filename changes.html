@@ -22,6 +22,7 @@ CHANGELOG
 - GomagData.gs: Indexes Gomag products by internal ID, SKU, EAN, and output ID while deduplicating sheet rows, improving order item matching.
 - GomagData.gs: Fetches real Gomag product records by order item ID/SKU when ordered products are missing from the paged product list.
 - GomagData.gs: Reads Gomag `Api-RateLimit-Read-*` headers and throttles requests when read capacity is low.
+- GomagData.gs: Makes order item processing resumable within a page, resets per-tick lookup counters on each worker run, and caps individual product lookups at 80 per tick to stay inside Apps Script time limits.
 - AdsScriptModal.html / MenuSetup.gs: Renders Google Ads copy code via JSON + `textContent` so the modal cannot fail on script-like HTML content.
 - CommonUtilities.gs: Added Gomag defaults for product ID mode.
 - runAllLabelCalculations.gs: Added `Gomag` as a source sheet for Metrics consolidation and skips source rows without a resolved product ID.
