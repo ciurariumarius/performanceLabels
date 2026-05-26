@@ -13,6 +13,7 @@ CHANGELOG
 - WooCommerceData.gs / ShopifyData.gs / GomagData.gs: Added one-shot Platform Data Only support so advanced store syncs can skip the automatic label recalculation.
 - Google Ads copy script: Namespaced Google Ads-only Overview helpers so Sheets-side Gomag/Woo/Shopify runs cannot accidentally call `AdsApp`.
 - GoogleAdsData.html / AdsScriptContent.gs: Moved the Google Ads copy-paste script out of `.gs` runtime code so it cannot define functions or reference `AdsApp` inside the Sheets project.
+- GomagData.gs: Fixed Gomag product parsing for object-shaped API responses and `variations`, and added fetch counts to Overview status messages.
 - CommonUtilities.gs: Added Gomag defaults for product ID mode.
 - runAllLabelCalculations.gs: Added `Gomag` as a source sheet for Metrics consolidation and skips source rows without a resolved product ID.
 - GoogleAnalyticsData.gs: Fixed GA4 Overview logging by passing the report timeframe into the sheet writer instead of referencing an out-of-scope variable.

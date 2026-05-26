@@ -105,7 +105,10 @@ function consolidateMetrics(ss) {
   const gomagData = gomagSheet ? getGomagData_(gomagSheet) : [];
   const gadsMap = gadsSheet ? loadGAdsDataMap_(gadsSheet) : {};
   
-  const sourceData = [...shopifyData, ...wooData, ...gomagData].filter(item => item.id);
+  const sourceRows = [...shopifyData, ...wooData, ...gomagData];
+  const sourceData = sourceRows.filter(item => item.id);
+  const skippedRows = sourceRows.length - sourceData.length;
+  Logger.log(`Source rows loaded: Shopify=${shopifyData.length}, WooCommerce=${wooData.length}, Gomag=${gomagData.length}. Usable IDs=${sourceData.length}, skipped blank IDs=${skippedRows}.`);
   
   const combinedData = sourceData.map(item => {
     const safeId = String(item.id).toLowerCase();

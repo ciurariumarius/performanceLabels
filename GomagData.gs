@@ -142,7 +142,7 @@ function executeGomagFetchProductsPhase_(config, state, productMap, executionSta
       addGomagProductToMap_(productMap, product, config);
     });
 
-    logGomagStatus_("RUNNING", `Fetched Gomag products page ${state.page}.`);
+    logGomagStatus_("RUNNING", `Fetched Gomag products page ${state.page}: ${products.length} items.`);
 
     if (products.length < GOMAG_PAGE_SIZE) {
       state.phase = 'FETCH_ORDERS';
@@ -165,7 +165,7 @@ function executeGomagFetchOrdersPhase_(config, state, productMap, executionStart
   const end = Utilities.formatDate(endDate, timeZone, "yyyy-MM-dd");
 
   while (!isGomagTimeUp_(executionStart)) {
-    const endpoint = `${GOMAG_API_BASE_URL}/order/read/json?startDate=${start}&endDate=${end}&page=${state.page}`;
+    const endpoint = `${GOMAG_API_BASE_URL}/order/read/json?startDate=${start}&endDate=${end}&page=${state.page}&limit=${GOMAG_PAGE_SIZE}`;
     const response = fetchGomagJson_(endpoint, config);
     const orders = extractGomagItems_(response, ['orders', 'data', 'items']);
 
@@ -173,7 +173,7 @@ function executeGomagFetchOrdersPhase_(config, state, productMap, executionStart
       processGomagOrder_(order, productMap, state, config, day14);
     });
 
-    logGomagStatus_("RUNNING", `Fetched Gomag orders page ${state.page}.`);
+    logGomagStatus_("RUNNING", `Fetched Gomag orders page ${state.page}: ${orders.length} orders.`);
 
     if (orders.length < GOMAG_PAGE_SIZE) {
       state.phase = 'WRITE_DATA';
@@ -289,7 +289,9 @@ function executeGomagWriteDataPhase_(config, state, productMap, executionStart, 
 function addGomagProductToMap_(productMap, product, config) {
   const versions = Array.isArray(product.versions) && product.versions.length > 0
     ? product.versions
-    : [product];
+    : (Array.isArray(product.variations) && product.variations.length > 0
+      ? product.variations
+      : [product]);
 
   versions.forEach(version => {
     const productData = normalizeGomagProduct_(product, version, config);
@@ -299,7 +301,7 @@ function addGomagProductToMap_(productMap, product, config) {
 }
 
 function normalizeGomagProduct_(product, version, config) {
-  const internalId = String(firstDefinedGomag_(product.id, product.product, product.productId, "") || "");
+  const internalId = String(firstDefinedGomag_(version.id, version.product, version.productId, product.id, product.product, product.productId, "") || "");
   const sku = String(firstDefinedGomag_(version.sku, product.sku, "") || "");
   const ean = String(firstDefinedGomag_(version.ean, product.ean, "") || "");
   const id = resolveGomagProductId_(config.idMode, internalId, sku, ean);
@@ -307,10 +309,10 @@ function normalizeGomagProduct_(product, version, config) {
 
   return {
     id: id,
-    name: resolveGomagLocalized_(firstDefinedGomag_(product.name, version.name, "")),
+    name: resolveGomagLocalized_(firstDefinedGomag_(version.name, product.name, "")),
     category: resolveGomagCategory_(product.categories),
     price: price,
-    dateCreated: firstDefinedGomag_(product.date_created, product.dateCreated, product.created_at, product.created, product.date, ""),
+    dateCreated: firstDefinedGomag_(version.created, product.created, product.date_created, product.dateCreated, product.created_at, product.date, product.updated, ""),
     orders: 0,
     sold: 0,
     rev: 0,
@@ -357,9 +359,9 @@ function processGomagOrder_(order, productMap, state, config, day14) {
 }
 
 function resolveGomagOrderItemKey_(item, config) {
-  const internalId = String(firstDefinedGomag_(item.product, item.productId, item.product_id, item.id, "") || "");
-  const sku = String(firstDefinedGomag_(item.sku, item.SKU, "") || "");
-  const ean = String(firstDefinedGomag_(item.ean, item.EAN, "") || "");
+  const internalId = String(firstDefinedGomag_(item.product, item.productId, item.product_id, item.productID, item.id_product, item.id, "") || "");
+  const sku = String(firstDefinedGomag_(item.sku, item.SKU, item.product_sku, item.productSku, item.code, "") || "");
+  const ean = String(firstDefinedGomag_(item.ean, item.EAN, item.product_ean, item.productEan, "") || "");
   return resolveGomagProductId_(config.idMode, internalId, sku, ean);
 }
 
@@ -370,15 +372,15 @@ function resolveGomagProductId_(idMode, internalId, sku, ean) {
 }
 
 function resolveGomagPrice_(version, product) {
-  const specialPrice = parseFloatSafe(firstDefinedGomag_(version.specialPrice, product.specialPrice, ""), 0);
+  const specialPrice = parseFloatSafe(firstDefinedGomag_(version.specialPrice, version.special_price, product.specialPrice, product.special_price, ""), 0);
   if (specialPrice > 0) return specialPrice;
-  return parseFloatSafe(firstDefinedGomag_(version.price, product.price, 0), 0);
+  return parseFloatSafe(firstDefinedGomag_(version.price, product.price, version.base_price, product.base_price, 0), 0);
 }
 
 function resolveGomagLineRevenue_(item, qty) {
-  const directTotal = parseFloatSafe(firstDefinedGomag_(item.total, item.value, item.subtotal, ""), NaN);
+  const directTotal = parseFloatSafe(firstDefinedGomag_(item.total, item.total_price, item.totalPrice, item.value, item.subtotal, item.final_price, ""), NaN);
   if (!isNaN(directTotal)) return directTotal;
-  return parseFloatSafe(firstDefinedGomag_(item.price, 0), 0) * qty;
+  return parseFloatSafe(firstDefinedGomag_(item.price, item.product_price, item.unit_price, 0), 0) * qty;
 }
 
 function fetchGomagJson_(endpoint, config, retries = 3) {
@@ -422,27 +424,57 @@ function extractGomagItems_(response, preferredKeys) {
 
   for (let i = 0; i < preferredKeys.length; i++) {
     const value = response && response[preferredKeys[i]];
-    if (Array.isArray(value)) return value;
+    const items = normalizeGomagCollection_(value);
+    if (items.length > 0) return items;
   }
 
   if (response && response.data) {
+    const dataItems = normalizeGomagCollection_(response.data);
+    if (dataItems.length > 0) return dataItems;
+
     for (const key in response.data) {
-      if (Array.isArray(response.data[key])) return response.data[key];
+      const items = normalizeGomagCollection_(response.data[key]);
+      if (items.length > 0) return items;
     }
   }
 
   if (response && response.response) {
-    if (Array.isArray(response.response)) return response.response;
+    const responseItems = normalizeGomagCollection_(response.response);
+    if (responseItems.length > 0) return responseItems;
+
     for (const key in response.response) {
-      if (Array.isArray(response.response[key])) return response.response[key];
+      const items = normalizeGomagCollection_(response.response[key]);
+      if (items.length > 0) return items;
     }
   }
 
   for (const key in response) {
-    if (Array.isArray(response[key])) return response[key];
+    const items = normalizeGomagCollection_(response[key]);
+    if (items.length > 0) return items;
   }
 
   return [];
+}
+
+function normalizeGomagCollection_(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter(item => item && typeof item === 'object');
+  if (typeof value !== 'object') return [];
+
+  if (isGomagRecord_(value)) return [value];
+
+  return Object.keys(value)
+    .map(key => value[key])
+    .filter(item => item && typeof item === 'object');
+}
+
+function isGomagRecord_(value) {
+  if (!value || typeof value !== 'object') return false;
+  const recordKeys = [
+    'id', 'sku', 'name', 'products', 'items', 'line_items',
+    'versions', 'variations', 'price', 'stock', 'stockStatus'
+  ];
+  return recordKeys.some(key => value[key] !== undefined);
 }
 
 function resolveGomagLocalized_(value) {
@@ -458,11 +490,22 @@ function resolveGomagLocalized_(value) {
 }
 
 function resolveGomagCategory_(categories) {
+  if (!categories) return "N/A";
+
+  if (!Array.isArray(categories) && typeof categories === 'object') {
+    const firstKey = Object.keys(categories)[0];
+    categories = firstKey ? categories[firstKey] : [];
+  }
+
   if (!Array.isArray(categories) || categories.length === 0) return "N/A";
   const firstPath = categories[0];
 
   if (Array.isArray(firstPath)) {
     return firstPath.map(resolveGomagLocalized_).filter(String).join(" > ") || "N/A";
+  }
+
+  if (firstPath && typeof firstPath === 'object') {
+    return resolveGomagLocalized_(firstDefinedGomag_(firstPath.name, firstPath.title, firstPath));
   }
 
   return resolveGomagLocalized_(firstPath) || "N/A";
