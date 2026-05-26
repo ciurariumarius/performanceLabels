@@ -251,6 +251,8 @@ function getCurrentSettingsForDialog() {
     shopifyDomain: props.getProperty('SHOPIFY_DOMAIN')      || '',
     shopifyId:     mask('SHOPIFY_CLIENT_ID'),
     shopifySecret: mask('SHOPIFY_CLIENT_SECRET'),
+    shopifyFormat: props.getProperty('CFG_SHOPIFY_FORMAT') || DEFAULT_LABEL_CONFIG.Shopify.ProductIdFormat,
+    shopifyCountryCode: props.getProperty('CFG_COUNTRY_CODE') || DEFAULT_LABEL_CONFIG.Shopify.CountryCode,
     gomagApiShop:  props.getProperty('GOMAG_API_SHOP')      || '',
     gomagApiKey:   mask('GOMAG_API_KEY'),
     gomagIdMode:   props.getProperty('CFG_GOMAG_ID_MODE')   || DEFAULT_LABEL_CONFIG.Gomag.ProductIdMode,
@@ -276,6 +278,10 @@ function saveSettingsFromDialog(payload) {
   if (payload.shopifyDomain)  props.setProperty('SHOPIFY_DOMAIN',        payload.shopifyDomain);
   if (payload.shopifyId)      props.setProperty('SHOPIFY_CLIENT_ID',     payload.shopifyId);
   if (payload.shopifySecret)  props.setProperty('SHOPIFY_CLIENT_SECRET', payload.shopifySecret);
+  if (payload.platform === 'shopify') {
+    props.setProperty('CFG_SHOPIFY_FORMAT', payload.shopifyFormat || DEFAULT_LABEL_CONFIG.Shopify.ProductIdFormat);
+    props.setProperty('CFG_COUNTRY_CODE', payload.shopifyCountryCode || DEFAULT_LABEL_CONFIG.Shopify.CountryCode);
+  }
 
   // Gomag
   if (payload.gomagApiShop) props.setProperty('GOMAG_API_SHOP', payload.gomagApiShop);
@@ -336,9 +342,7 @@ function getLabelSettingsForDialog() {
     minOrders: getProp('CFG_MIN_ORDERS', DEFAULT_LABEL_CONFIG.Orders.Threshold),
     priceStep: getProp('CFG_PRICE_STEP', DEFAULT_LABEL_CONFIG.PriceIntervalStep),
     
-    // ID Styling
-    shopifyFormat: getProp('CFG_SHOPIFY_FORMAT', DEFAULT_LABEL_CONFIG.Shopify.ProductIdFormat),
-    countryCode: getProp('CFG_COUNTRY_CODE', DEFAULT_LABEL_CONFIG.Shopify.CountryCode),
+    // Secondary feed ID styling
     idPrefix: getProp('CFG_ID_PREFIX', DEFAULT_LABEL_CONFIG.IdPrefix),
     idSuffix: getProp('CFG_ID_SUFFIX', DEFAULT_LABEL_CONFIG.IdSuffix),
     
@@ -376,8 +380,6 @@ function saveLabelSettingsFromDialog(payload) {
   props.setProperty('CFG_MIN_ORDERS', payload.minOrders);
   props.setProperty('CFG_PRICE_STEP', payload.priceStep);
   
-  props.setProperty('CFG_SHOPIFY_FORMAT', payload.shopifyFormat);
-  props.setProperty('CFG_COUNTRY_CODE', payload.countryCode);
   props.setProperty('CFG_ID_PREFIX', payload.idPrefix);
   props.setProperty('CFG_ID_SUFFIX', payload.idSuffix);
   

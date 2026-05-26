@@ -96,6 +96,20 @@
       <label>Client Secret</label>
       <input type="password" id="shopify-secret" placeholder="Leave blank to keep existing">
     </div>
+    <div class="section">
+      <label>Product ID Format</label>
+      <div class="hint">Used to match Shopify products with Merchant Center IDs.</div>
+      <select id="shopify-format">
+        <option value="shopify">shopify (Standard)</option>
+        <option value="variant_id">variant_id (Only)</option>
+        <option value="parent_id">parent_id (Only)</option>
+      </select>
+    </div>
+    <div class="section">
+      <label>Shopify Country Code</label>
+      <div class="hint">Used only for standard format: shopify_{COUNTRY}_{productId}_{variantId}</div>
+      <input type="text" id="shopify-country-code" placeholder="e.g. zz, us, de">
+    </div>
   </div>
 
   <!-- Gomag Fields -->
@@ -141,6 +155,8 @@
         document.getElementById('shopify-domain').value = data.shopifyDomain || '';
         document.getElementById('shopify-id').value     = data.shopifyId     || '';
         document.getElementById('shopify-secret').value = data.shopifySecret || '';
+        document.getElementById('shopify-format').value = data.shopifyFormat || 'shopify';
+        document.getElementById('shopify-country-code').value = data.shopifyCountryCode || 'zz';
         document.getElementById('gomag-api-shop').value = data.gomagApiShop || '';
         document.getElementById('gomag-api-key').value  = data.gomagApiKey  || '';
         document.getElementById('gomag-id-mode').value  = data.gomagIdMode  || 'sku';
@@ -190,6 +206,8 @@
         shopifyDomain: document.getElementById('shopify-domain').value.trim(),
         shopifyId:     changed('shopify-id'),
         shopifySecret: changed('shopify-secret'),
+        shopifyFormat: document.getElementById('shopify-format').value,
+        shopifyCountryCode: document.getElementById('shopify-country-code').value.trim(),
         gomagApiShop:  document.getElementById('gomag-api-shop').value.trim(),
         gomagApiKey:   changed('gomag-api-key'),
         gomagIdMode:   document.getElementById('gomag-id-mode').value,

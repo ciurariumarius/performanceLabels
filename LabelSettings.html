@@ -116,23 +116,8 @@
     </div>
 
     <div class="panel">
-      <div class="panel-title">🔑 ID Formatting Defaults</div>
+      <div class="panel-title">🔑 Secondary Feed ID Formatting</div>
       <div class="grid">
-        <div>
-          <label>Shopify Format Type</label>
-          <select id="shopifyFormat">
-            <option value="shopify">shopify (Standard)</option>
-            <option value="variant_id">variant_id (Only)</option>
-            <option value="parent_id">parent_id (Only)</option>
-          </select>
-        </div>
-        <div>
-          <label>Shopify Country Code</label>
-          <input type="text" id="countryCode" placeholder="e.g. zz, us, de">
-        </div>
-        <div class="full-width hint" style="margin-top: -8px; border-bottom: 1px solid #f1f3f4; padding-bottom: 10px; margin-bottom: 4px;">
-          Note: If standard format is selected, ID generated is `shopify_{COUNTRY}_{productId}_{variantId}`
-        </div>
         <div>
           <label>GMC_Feed_2 Prefix</label>
           <input type="text" id="idPrefix" placeholder="Optional">
@@ -192,8 +177,6 @@
         document.getElementById('minOrders').value = data.minOrders;
         document.getElementById('priceStep').value = data.priceStep;
         
-        document.getElementById('shopifyFormat').value = data.shopifyFormat;
-        document.getElementById('countryCode').value = data.countryCode;
         document.getElementById('idPrefix').value = data.idPrefix;
         document.getElementById('idSuffix').value = data.idSuffix;
         
@@ -226,8 +209,6 @@
         minOrders: document.getElementById('minOrders').value,
         priceStep: document.getElementById('priceStep').value,
         
-        shopifyFormat: document.getElementById('shopifyFormat').value,
-        countryCode: document.getElementById('countryCode').value,
         idPrefix: document.getElementById('idPrefix').value,
         idSuffix: document.getElementById('idSuffix').value,
 
