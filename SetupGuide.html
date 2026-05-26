@@ -49,10 +49,14 @@
     }
 
     function renderStep(title, status, actionLabel, actionName) {
+      var badge = status.state === 'Optional'
+        ? ''
+        : '<span class="badge ' + badgeClass(status.state) + '">' + status.state + '</span>';
+
       return [
         '<div class="step">',
         '<div>',
-        '<span class="badge ' + badgeClass(status.state) + '">' + status.state + '</span>',
+        badge,
         '<div class="step-title">' + title + '</div>',
         '<div class="step-detail">' + status.detail + '</div>',
         '</div>',
@@ -67,8 +71,7 @@
         renderStep('1. Platform and API credentials', data.credentials, 'Open Settings', 'openSettings'),
         renderStep('2. Label and timeframe settings', data.labels, 'Tune Labels', 'openLabelSettings'),
         renderStep('3. Google Ads script', data.adsScript, 'Copy Script', 'openAdsScript'),
-        renderStep('4. Auto-fetch schedule', data.autoFetch, 'Set Schedule', 'setupSchedule'),
-        renderStep('5. Status and logs', { state: 'Optional', detail: 'Open the Overview sheet to monitor sync status and history.' }, 'Open Overview', 'openOverview')
+        renderStep('4. Auto-fetch schedule', data.autoFetch, 'Set Schedule', 'setupSchedule')
       ].join('');
     }
 
@@ -106,12 +109,6 @@
         .withSuccessHandler(refresh)
         .withFailureHandler(showError)
         .setupActivePlatformAutoFetch();
-    }
-
-    function openOverview() {
-      google.script.run
-        .withFailureHandler(showError)
-        .openOverviewSheet();
     }
 
     function runNow() {

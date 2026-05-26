@@ -24,25 +24,18 @@ function getActivePlatform() {
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
 
-  const advancedMenu = ui.createMenu('Advanced')
-      .addItem('Platform Data Only', 'runActivePlatformDataOnly')
-      .addItem('GA4 Report Only', 'runGA4Report')
-      .addItem('Recalculate Labels Only', 'runAllLabelCalculations')
-      .addSeparator()
-      .addItem('Auto-Fetch Schedule', 'setupActivePlatformAutoFetch')
-      .addItem('Platform Settings', 'showSettingsDialog')
+  const settingsMenu = ui.createMenu('Settings')
       .addItem('Label Settings', 'showLabelSettingsDialog')
-      .addItem('Setup Status', 'showSetupGuide')
-      .addSeparator()
+      .addItem('Platform Settings', 'showSettingsDialog')
+      .addItem('Auto-Fetch Setup', 'setupActivePlatformAutoFetch')
       .addItem('Documentation', 'showDocumentation');
 
   ui.createMenu('Performance Labels')
-      .addItem('Setup Guide', 'showSetupGuide')
+      .addItem('Setup Script', 'showSetupGuide')
       .addItem('Run Now', 'runActivePlatformOrSetup')
-      .addItem('Status & Logs', 'openOverviewSheet')
-      .addItem('Google Ads Script', 'showAdsScriptModal')
+      .addItem('Google Ads Script [To Copy]', 'showAdsScriptModal')
       .addSeparator()
-      .addSubMenu(advancedMenu)
+      .addSubMenu(settingsMenu)
       .addToUi();
 }
 
@@ -87,12 +80,15 @@ function runActivePlatform_(skipLabelsOnce) {
   }
 
   if (platform === 'shopify') {
+    ensureActivePlatformWorkerTrigger_(platform);
     startShopifyReport();
   } else if (platform === 'gomag') {
+    ensureActivePlatformWorkerTrigger_(platform);
     startGomagReport();
   } else if (platform === 'ga4') {
     runGA4Report();
   } else if (platform === 'woocommerce') {
+    ensureActivePlatformWorkerTrigger_(platform);
     startWooCommerceReport();
   } else {
     showSetupGuide();

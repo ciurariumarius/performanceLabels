@@ -15,10 +15,8 @@
 function setupWooCommerceComplete() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // 1. Clean existing triggers to prevent duplicates
-  deleteTriggersForHandler_('startWooCommerceReport');
-  deleteTriggersForHandler_('processBatchWorker');
-  deleteTriggersForHandler_('runAllLabelCalculations');
+  // 1. Clean existing platform triggers to prevent duplicates and stale platform runs
+  deleteAllPlatformTriggers_();
 
   // 2. Woo Start (Daily 5am)
   ScriptApp.newTrigger('startWooCommerceReport')
@@ -54,11 +52,8 @@ function setupWooCommerceComplete() {
 function setupShopifyComplete() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // 1. Clean existing triggers (including old ones)
-  deleteTriggersForHandler_('runShopifyReport'); // Legacy
-  deleteTriggersForHandler_('startShopifyReport');
-  deleteTriggersForHandler_('processShopifyWorker');
-  deleteTriggersForHandler_('runAllLabelCalculations');
+  // 1. Clean existing platform triggers (including old ones)
+  deleteAllPlatformTriggers_();
 
   // 2. Shopify Start (Daily 5am)
   ScriptApp.newTrigger('startShopifyReport')
@@ -93,9 +88,7 @@ function setupShopifyComplete() {
 function setupGomagComplete() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  deleteTriggersForHandler_('startGomagReport');
-  deleteTriggersForHandler_('processGomagWorker');
-  deleteTriggersForHandler_('runAllLabelCalculations');
+  deleteAllPlatformTriggers_();
 
   ScriptApp.newTrigger('startGomagReport')
     .timeBased()
@@ -122,7 +115,7 @@ function setupGomagComplete() {
 function setupGA4Complete() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  deleteTriggersForHandler_('runGA4Report');
+  deleteAllPlatformTriggers_();
 
   ScriptApp.newTrigger('runGA4Report')
     .timeBased()
@@ -146,4 +139,44 @@ function deleteTriggersForHandler_(handlerName) {
       ScriptApp.deleteTrigger(trigger);
     }
   });
+}
+
+function deleteAllPlatformTriggers_() {
+  [
+    'startWooCommerceReport',
+    'processBatchWorker',
+    'runShopifyReport',
+    'startShopifyReport',
+    'processShopifyWorker',
+    'startGomagReport',
+    'processGomagWorker',
+    'runGA4Report',
+    'runAllLabelCalculations'
+  ].forEach(deleteTriggersForHandler_);
+}
+
+function ensureActivePlatformWorkerTrigger_(platform) {
+  const workerHandlers = {
+    woocommerce: 'processBatchWorker',
+    shopify: 'processShopifyWorker',
+    gomag: 'processGomagWorker'
+  };
+
+  const handlerName = workerHandlers[platform];
+  if (!handlerName) return;
+
+  ensureTimeTriggerForHandler_(handlerName, 5);
+}
+
+function ensureTimeTriggerForHandler_(handlerName, minutes) {
+  const exists = ScriptApp.getProjectTriggers().some(trigger => {
+    return trigger.getHandlerFunction() === handlerName;
+  });
+
+  if (exists) return;
+
+  ScriptApp.newTrigger(handlerName)
+    .timeBased()
+    .everyMinutes(minutes)
+    .create();
 }
