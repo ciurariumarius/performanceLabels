@@ -128,6 +128,7 @@ function processGomagBatchCore_() {
     }
     console.error("Gomag Core Error: " + e.message);
     logGomagStatus_("ERROR", e.message);
+    props.setProperty('GOMAG_WORKER_STATUS', 'IDLE');
   }
 }
 
@@ -176,7 +177,7 @@ function executeGomagFetchOrdersPhase_(config, state, productMap, executionStart
     const orders = extractGomagItems_(response, ['orders', 'data', 'items']);
 
     orders.forEach(order => {
-      processGomagOrder_(order, productMap, state, config, day14);
+      processGomagOrder_(order, productMap, state, day14);
     });
 
     logGomagStatus_("RUNNING", `Fetched Gomag orders page ${state.page}: ${orders.length} orders.`);
@@ -301,7 +302,7 @@ function addGomagProductToMap_(productMap, product, config) {
 
   versions.forEach(version => {
     const productData = normalizeGomagProduct_(product, version, config);
-    const mapKey = productData.id || `missing_id_${productData.internalId || ""}_${productData.sku || ""}_${productData.ean || ""}`;
+    const mapKey = productData.internalId || productData.sku || productData.ean || `missing_id_${productData.id || ""}`;
     productMap[mapKey] = productData;
   });
 }
@@ -323,7 +324,7 @@ function normalizeGomagProduct_(product, version, config) {
     sold: 0,
     rev: 0,
     rev14: 0,
-    stockStatus: firstDefinedGomag_(version.stockStatus, product.stockStatus, ""),
+    stockStatus: firstDefinedGomag_(version.stockStatus, version.stock_status, product.stockStatus, product.stock_status, ""),
     stockQty: parseIntSafe(firstDefinedGomag_(version.stock, product.stock, 0), 0),
     internalId: internalId,
     sku: sku,
@@ -331,18 +332,19 @@ function normalizeGomagProduct_(product, version, config) {
   };
 }
 
-function processGomagOrder_(order, productMap, state, config, day14) {
+function processGomagOrder_(order, productMap, state, day14) {
   state.uniqueOrdersCount++;
   const orderDate = parseGomagDate_(firstDefinedGomag_(order.date, order.created_at, order.created, order.dateCreated, ""));
   const products = Array.isArray(order.products) && order.products.length > 0
     ? order.products
     : (Array.isArray(order.items) && order.items.length > 0
       ? order.items
-      : (Array.isArray(order.line_items) ? order.line_items : []));
+      : (Array.isArray(order.line_items) && order.line_items.length > 0
+        ? order.line_items
+        : normalizeGomagCollection_(firstDefinedGomag_(order.items, order.products, order.line_items, []))));
 
   products.forEach(item => {
-    const key = resolveGomagOrderItemKey_(item, config);
-    const product = key ? productMap[key] : null;
+    const product = findGomagProductForOrderItem_(item, productMap);
 
     if (!product) {
       state.unmatchedOrderItems = (state.unmatchedOrderItems || 0) + 1;
@@ -364,11 +366,25 @@ function processGomagOrder_(order, productMap, state, config, day14) {
   });
 }
 
-function resolveGomagOrderItemKey_(item, config) {
+function findGomagProductForOrderItem_(item, productMap) {
+  const internalId = resolveGomagOrderInternalId_(item);
+  if (internalId && productMap[internalId]) return productMap[internalId];
+
+  const sku = String(firstDefinedGomag_(item.sku, item.SKU, item.product_sku, item.productSku, item.code, "") || "").trim();
+  const ean = String(firstDefinedGomag_(item.ean, item.EAN, item.product_ean, item.productEan, "") || "").trim();
+  const outputId = String(firstDefinedGomag_(item.id, item.product_id, item.productId, "") || "").trim();
+
+  const products = Object.values(productMap);
+  return products.find(product =>
+    (sku && String(product.sku || "") === sku) ||
+    (ean && String(product.ean || "") === ean) ||
+    (outputId && String(product.id || "") === outputId)
+  ) || null;
+}
+
+function resolveGomagOrderInternalId_(item) {
   const internalId = String(firstDefinedGomag_(item.product, item.productId, item.product_id, item.productID, item.id_product, item.id, "") || "");
-  const sku = String(firstDefinedGomag_(item.sku, item.SKU, item.product_sku, item.productSku, item.code, "") || "");
-  const ean = String(firstDefinedGomag_(item.ean, item.EAN, item.product_ean, item.productEan, "") || "");
-  return resolveGomagProductId_(config.idMode, internalId, sku, ean);
+  return internalId.trim();
 }
 
 function resolveGomagProductId_(idMode, internalId, sku, ean) {
@@ -407,7 +423,9 @@ function fetchGomagJson_(endpoint, config, retries = 3) {
       const body = response.getContentText();
 
       if (code >= 200 && code < 300) {
-        return JSON.parse(body);
+        const parsed = JSON.parse(body);
+        throwIfGomagApiError_(parsed);
+        return parsed;
       }
 
       if (i < retries - 1 && (code === 429 || code >= 500)) {
@@ -423,6 +441,19 @@ function fetchGomagJson_(endpoint, config, retries = 3) {
   }
 
   throw new Error(`Failed to fetch Gomag endpoint: ${endpoint}`);
+}
+
+function throwIfGomagApiError_(response) {
+  if (!response || typeof response !== 'object' || Array.isArray(response)) return;
+
+  const rawError = firstDefinedGomag_(response.error, response.status, "");
+  const message = firstDefinedGomag_(response.message, response.error_message, response.errorMessage, "");
+
+  if (!message) return;
+  if (String(rawError || "").trim() === "" && !/error|eroare|permisi/i.test(String(message))) return;
+
+  const code = String(rawError || "").trim();
+  throw new Error(`Gomag API error${code ? ` ${code}` : ""}: ${message}`);
 }
 
 function writeGomagDebug_(response, endpoint, phase) {
