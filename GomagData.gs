@@ -7,6 +7,7 @@
 
 const GOMAG_DATA_SHEET_NAME = "Gomag";
 const GOMAG_ACCOUNT_SHEET_NAME = "Overview";
+const GOMAG_DEBUG_SHEET_NAME = "Gomag_Debug";
 const GOMAG_TEMP_FILENAME = "temp_gomag_batch_data.json";
 const GOMAG_MAX_EXECUTION_TIME_MS = 1000 * 60 * 4;
 const GOMAG_PAGE_SIZE = 100;
@@ -137,6 +138,11 @@ function executeGomagFetchProductsPhase_(config, state, productMap, executionSta
     const endpoint = `${GOMAG_API_BASE_URL}/product/read/json?page=${state.page}&limit=${GOMAG_PAGE_SIZE}&addVersions=true`;
     const response = fetchGomagJson_(endpoint, config);
     const products = extractGomagItems_(response, ['products', 'data', 'items']);
+
+    if (products.length === 0 && state.page === 1) {
+      writeGomagDebug_(response, endpoint, 'products');
+      throw new Error(`Gomag returned 0 products on page 1. Open ${GOMAG_DEBUG_SHEET_NAME} to inspect the API response shape.`);
+    }
 
     products.forEach(product => {
       addGomagProductToMap_(productMap, product, config);
@@ -419,16 +425,65 @@ function fetchGomagJson_(endpoint, config, retries = 3) {
   throw new Error(`Failed to fetch Gomag endpoint: ${endpoint}`);
 }
 
+function writeGomagDebug_(response, endpoint, phase) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = getOrCreateSheet(ss, GOMAG_DEBUG_SHEET_NAME);
+    sheet.clear();
+
+    const responseText = JSON.stringify(response, null, 2);
+    const rows = [
+      ["Checked At", new Date()],
+      ["Phase", phase],
+      ["Endpoint", endpoint],
+      ["Top-level Keys", summarizeGomagKeys_(response)],
+      ["total", response && response.total !== undefined ? response.total : ""],
+      ["page", response && response.page !== undefined ? response.page : ""],
+      ["pages", response && response.pages !== undefined ? response.pages : ""],
+      ["products type", describeGomagValue_(response && response.products)],
+      ["data type", describeGomagValue_(response && response.data)],
+      ["response type", describeGomagValue_(response && response.response)],
+      ["Preview", responseText.substring(0, 45000)]
+    ];
+
+    sheet.getRange(1, 1, rows.length, 2).setValues(rows);
+    sheet.setColumnWidth(1, 160);
+    sheet.setColumnWidth(2, 700);
+    sheet.getRange("A:A").setFontWeight("bold");
+    sheet.getRange("B11").setWrap(true);
+  } catch (e) {
+    console.warn("Failed to write Gomag debug sheet: " + e.message);
+  }
+}
+
+function summarizeGomagKeys_(value) {
+  if (!value || typeof value !== 'object') return "";
+  return Object.keys(value).slice(0, 30).join(", ");
+}
+
+function describeGomagValue_(value) {
+  if (Array.isArray(value)) return `array(${value.length})`;
+  if (!value || typeof value !== 'object') return String(value === undefined ? "" : value);
+  const keys = Object.keys(value);
+  return `object(${keys.length}) keys: ${keys.slice(0, 12).join(", ")}`;
+}
+
 function extractGomagItems_(response, preferredKeys) {
   if (Array.isArray(response)) return response;
 
   for (let i = 0; i < preferredKeys.length; i++) {
     const value = response && response[preferredKeys[i]];
+    const nestedItems = extractNestedGomagCollection_(value, preferredKeys);
+    if (nestedItems.length > 0) return nestedItems;
+
     const items = normalizeGomagCollection_(value);
     if (items.length > 0) return items;
   }
 
   if (response && response.data) {
+    const nestedItems = extractNestedGomagCollection_(response.data, preferredKeys);
+    if (nestedItems.length > 0) return nestedItems;
+
     const dataItems = normalizeGomagCollection_(response.data);
     if (dataItems.length > 0) return dataItems;
 
@@ -450,6 +505,18 @@ function extractGomagItems_(response, preferredKeys) {
 
   for (const key in response) {
     const items = normalizeGomagCollection_(response[key]);
+    if (items.length > 0) return items;
+  }
+
+  return [];
+}
+
+function extractNestedGomagCollection_(value, preferredKeys) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+
+  for (let i = 0; i < preferredKeys.length; i++) {
+    const nestedValue = value[preferredKeys[i]];
+    const items = normalizeGomagCollection_(nestedValue);
     if (items.length > 0) return items;
   }
 
