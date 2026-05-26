@@ -25,6 +25,8 @@ function onOpen() {
   const ui = SpreadsheetApp.getUi();
 
   const settingsMenu = ui.createMenu('Settings')
+      .addItem('Run Now', 'runActivePlatformOrSetup')
+      .addSeparator()
       .addItem('Label Settings', 'showLabelSettingsDialog')
       .addItem('Platform Settings', 'showSettingsDialog')
       .addItem('Auto-Fetch Setup', 'setupActivePlatformAutoFetch')
@@ -32,7 +34,6 @@ function onOpen() {
 
   ui.createMenu('Performance Labels')
       .addItem('Setup Script', 'showSetupGuide')
-      .addItem('Run Now', 'runActivePlatformOrSetup')
       .addItem('Google Ads Script [To Copy]', 'showAdsScriptModal')
       .addSeparator()
       .addSubMenu(settingsMenu)
@@ -190,26 +191,12 @@ function getAutoFetchStatus_(platform) {
   if (!platform) {
     return {
       done: false,
-      state: 'Missing',
+      state: 'Not scheduled',
       detail: 'Choose a platform before scheduling auto-fetch.'
     };
   }
 
-  const requiredHandlers = {
-    woocommerce: ['startWooCommerceReport', 'processBatchWorker'],
-    shopify: ['startShopifyReport', 'processShopifyWorker'],
-    gomag: ['startGomagReport', 'processGomagWorker'],
-    ga4: ['runGA4Report']
-  }[platform] || [];
-
-  const activeHandlers = ScriptApp.getProjectTriggers().map(trigger => trigger.getHandlerFunction());
-  const missingHandlers = requiredHandlers.filter(handler => activeHandlers.indexOf(handler) === -1);
-
-  return {
-    done: missingHandlers.length === 0,
-    state: missingHandlers.length === 0 ? 'Done' : 'Optional',
-    detail: missingHandlers.length === 0 ? 'Auto-fetch triggers are installed.' : 'Auto-fetch is not scheduled yet.'
-  };
+  return getPlatformTriggerStatus_(platform);
 }
 
 function openOverviewSheet() {

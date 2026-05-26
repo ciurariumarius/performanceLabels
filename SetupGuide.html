@@ -43,13 +43,13 @@
 
   <script>
     function badgeClass(state) {
-      if (state === 'Done') return 'done';
-      if (state === 'Missing') return 'missing';
+      if (state === 'Done' || state === 'Scheduled') return 'done';
+      if (state === 'Missing' || state === 'Needs cleanup' || state === 'Not scheduled') return 'missing';
       return 'optional';
     }
 
     function renderStep(title, status, actionLabel, actionName) {
-      var badge = status.state === 'Optional'
+      var badge = status.state === 'Optional' || status.state === 'Manual worker only'
         ? ''
         : '<span class="badge ' + badgeClass(status.state) + '">' + status.state + '</span>';
 

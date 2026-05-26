@@ -9,7 +9,7 @@ CHANGELOG
 - Settings.html / MenuSetup.gs / TriggerSetup.gs: Added GA4 as its own selectable settings platform so the GA4 Property ID is only shown while configuring GA4.
 - GomagData.gs / Settings.html: Gomag now imports all orders in the selected timeframe and no longer requires Order Status IDs.
 - CommonUtilities.gs / MenuSetup.gs / Settings.html: Removed WooCommerce as the implicit default platform; users must select a platform explicitly before running or viewing credentials.
-- MenuSetup.gs / SetupGuide.html: Added a guided setup checklist and reorganized the Sheets menu around Setup Script, Run Now, Google Ads Script [To Copy], and Settings.
+- MenuSetup.gs / SetupGuide.html: Added a guided setup checklist and reorganized the Sheets menu around Setup Script, Google Ads Script [To Copy], and Settings.
 - WooCommerceData.gs / ShopifyData.gs / GomagData.gs: Added one-shot Platform Data Only support so advanced store syncs can skip the automatic label recalculation.
 - Google Ads copy script: Namespaced Google Ads-only Overview helpers so Sheets-side Gomag/Woo/Shopify runs cannot accidentally call `AdsApp`.
 - GoogleAdsData.html / AdsScriptContent.gs: Moved the Google Ads copy-paste script out of `.gs` runtime code so it cannot define functions or reference `AdsApp` inside the Sheets project.
@@ -24,8 +24,9 @@ CHANGELOG
 - GomagData.gs: Reads Gomag `Api-RateLimit-Read-*` headers and throttles requests when read capacity is low.
 - GomagData.gs: Makes order item processing resumable within a page, resets per-tick lookup counters on each worker run, and caps individual product lookups at 80 per tick to stay inside Apps Script time limits.
 - MenuSetup.gs / TriggerSetup.gs: `Run Now` now ensures the active store platform worker trigger exists, so manual runs can continue after Apps Script pauses without requiring Auto-Fetch Schedule first.
-- MenuSetup.gs: Simplified the main menu to `Setup Script`, `Run Now`, `Google Ads Script [To Copy]`, and a `Settings` submenu for label settings, platform settings, auto-fetch setup, and documentation.
+- MenuSetup.gs: Simplified the main menu to `Setup Script`, `Google Ads Script [To Copy]`, and a `Settings` submenu for run now, label settings, platform settings, auto-fetch setup, and documentation.
 - SetupGuide.html: Removed the `Status and logs` step and hides `Optional` badges so the guide stays focused on setup actions.
+- TriggerSetup.gs / MenuSetup.gs: Centralized platform trigger scheduling so Auto-Fetch Setup is idempotent, repairs stale or duplicate triggers, and distinguishes Scheduled, Manual worker only, Needs cleanup, and Not scheduled states.
 - AdsScriptModal.html / MenuSetup.gs: Renders Google Ads copy code via JSON + `textContent` so the modal cannot fail on script-like HTML content.
 - CommonUtilities.gs: Added Gomag defaults for product ID mode.
 - runAllLabelCalculations.gs: Added `Gomag` as a source sheet for Metrics consolidation and skips source rows without a resolved product ID.
