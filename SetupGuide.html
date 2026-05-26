@@ -33,8 +33,7 @@
       <div class="summary">Active platform: <span id="platform" class="platform">Loading...</span></div>
     </div>
     <div class="actions-top">
-      <button onclick="refresh()">Refresh</button>
-      <button class="primary" onclick="runNow()">Run Now</button>
+      <button onclick="refresh()">Check Status</button>
     </div>
   </div>
 
@@ -109,13 +108,6 @@
         .withSuccessHandler(refresh)
         .withFailureHandler(showError)
         .setupActivePlatformAutoFetch();
-    }
-
-    function runNow() {
-      google.script.run
-        .withSuccessHandler(refresh)
-        .withFailureHandler(showError)
-        .runActivePlatformOrSetup();
     }
 
     refresh();
