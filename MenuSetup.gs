@@ -468,7 +468,7 @@ function showDocumentation() {
 
 function showAdsScriptModal() {
   const template = HtmlService.createTemplateFromFile('AdsScriptModal');
-  template.adsScriptContent = getGoogleAdsScriptContent();
+  template.adsScriptContentJson = JSON.stringify(getGoogleAdsScriptContent());
   
   const html = template.evaluate()
       .setWidth(700)

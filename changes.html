@@ -18,6 +18,8 @@ CHANGELOG
 - GomagData.gs: Promotes Gomag API error payloads, including permission error 331, directly to Overview instead of treating them as empty data.
 - GomagData.gs / Settings.html: Gomag order revenue now matches products by Gomag internal IDs first; Product ID Mode only controls the exported ID used for Merchant/Ads matching.
 - GomagData.gs: Supports object-shaped Gomag `items` on orders and `stock_status` on products.
+- GomagData.gs: Writes sampled unmatched Gomag order items to `Gomag_Debug` so ID mapping issues are visible.
+- AdsScriptModal.html / MenuSetup.gs: Renders Google Ads copy code via JSON + `textContent` so the modal cannot fail on script-like HTML content.
 - CommonUtilities.gs: Added Gomag defaults for product ID mode.
 - runAllLabelCalculations.gs: Added `Gomag` as a source sheet for Metrics consolidation and skips source rows without a resolved product ID.
 - GoogleAnalyticsData.gs: Fixed GA4 Overview logging by passing the report timeframe into the sheet writer instead of referencing an out-of-scope variable.

@@ -20,6 +20,8 @@ const GOMAG_HEADERS = [
   "Stock Status", "Stock Quantity", "Gomag Internal ID", "SKU", "EAN"
 ];
 
+const GOMAG_MAX_UNMATCHED_SAMPLES = 25;
+
 function startGomagReport() {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(30000)) {
@@ -40,6 +42,7 @@ function startGomagReport() {
       totalRevenue: 0,
       totalItemsSold: 0,
       unmatchedOrderItems: 0,
+      unmatchedOrderSamples: [],
       status: "Starting..."
     };
 
@@ -275,6 +278,8 @@ function executeGomagWriteDataPhase_(config, state, productMap, executionStart, 
     config.days
   );
 
+  writeGomagUnmatchedDiagnostics_(ss, state);
+
   logGomagStatus_("COMPLETED", "Finished successfully.");
   resetGomagScript_();
   props.setProperty('GOMAG_WORKER_STATUS', 'IDLE');
@@ -348,6 +353,7 @@ function processGomagOrder_(order, productMap, state, day14) {
 
     if (!product) {
       state.unmatchedOrderItems = (state.unmatchedOrderItems || 0) + 1;
+      collectGomagUnmatchedOrderSample_(state, order, item);
       return;
     }
 
@@ -380,6 +386,52 @@ function findGomagProductForOrderItem_(item, productMap) {
     (ean && String(product.ean || "") === ean) ||
     (outputId && String(product.id || "") === outputId)
   ) || null;
+}
+
+function collectGomagUnmatchedOrderSample_(state, order, item) {
+  state.unmatchedOrderSamples = state.unmatchedOrderSamples || [];
+  if (state.unmatchedOrderSamples.length >= GOMAG_MAX_UNMATCHED_SAMPLES) return;
+
+  state.unmatchedOrderSamples.push({
+    orderId: firstDefinedGomag_(order.id, order.number, ""),
+    itemId: firstDefinedGomag_(item.id, item.product, item.productId, item.product_id, item.productID, item.id_product, ""),
+    sku: firstDefinedGomag_(item.sku, item.SKU, item.product_sku, item.productSku, item.code, ""),
+    ean: firstDefinedGomag_(item.ean, item.EAN, item.product_ean, item.productEan, ""),
+    name: firstDefinedGomag_(item.name, item.product_name, ""),
+    keys: Object.keys(item || {}).join(", "),
+    raw: JSON.stringify(item).substring(0, 1000)
+  });
+}
+
+function writeGomagUnmatchedDiagnostics_(ss, state) {
+  const samples = state.unmatchedOrderSamples || [];
+  if (!state.unmatchedOrderItems || samples.length === 0) return;
+
+  const sheet = getOrCreateSheet(ss, GOMAG_DEBUG_SHEET_NAME);
+  sheet.clear();
+
+  const headers = ["Order ID", "Item ID", "SKU", "EAN", "Name", "Item Keys", "Raw Item Preview"];
+  const rows = samples.map(sample => [
+    sample.orderId,
+    sample.itemId,
+    sample.sku,
+    sample.ean,
+    sample.name,
+    sample.keys,
+    sample.raw
+  ]);
+
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold");
+  sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+  sheet.setFrozenRows(1);
+  sheet.setColumnWidth(1, 110);
+  sheet.setColumnWidth(2, 110);
+  sheet.setColumnWidth(3, 180);
+  sheet.setColumnWidth(4, 150);
+  sheet.setColumnWidth(5, 260);
+  sheet.setColumnWidth(6, 320);
+  sheet.setColumnWidth(7, 600);
+  sheet.getRange(2, 7, rows.length, 1).setWrap(true);
 }
 
 function resolveGomagOrderInternalId_(item) {

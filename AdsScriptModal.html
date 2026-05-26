@@ -103,7 +103,7 @@
 
       <div class="code-container">
         <button class="copy-btn" id="copyBtn" onclick="copyCode()">Copy to Clipboard</button>
-        <pre id="adsCode"><?!= adsScriptContent ?></pre>
+        <pre id="adsCode"></pre>
       </div>
 
       <div class="footer">
@@ -112,6 +112,9 @@
     </div>
 
     <script>
+      const ADS_SCRIPT_CONTENT = <?!= adsScriptContentJson ?>;
+      document.getElementById('adsCode').textContent = ADS_SCRIPT_CONTENT;
+
       function copyCode() {
         const codeElement = document.getElementById('adsCode');
         const textArea = document.createElement('textarea');
