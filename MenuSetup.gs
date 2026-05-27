@@ -451,9 +451,9 @@ function viewStoreSettings() {
     const key = props.getProperty('GOMAG_API_KEY') ? '••••' + props.getProperty('GOMAG_API_KEY').slice(-4) : 'Not configured';
     const idMode = props.getProperty('CFG_GOMAG_ID_MODE') || DEFAULT_LABEL_CONFIG.Gomag.ProductIdMode;
     const productScope = props.getProperty('CFG_GOMAG_PRODUCT_SCOPE') || DEFAULT_LABEL_CONFIG.Gomag.ProductScope;
-    const secondaryIdMode = props.getProperty('CFG_GOMAG_SECONDARY_ID_MODE') || 'Disabled';
+    const secondaryIdMode = props.getProperty('CFG_GOMAG_SECONDARY_ID_MODE') || '';
     const statusIds = parseCommaList_(props.getProperty('CFG_GOMAG_ORDER_STATUS_IDS') || '');
-    message = `GOMAG\nApiShop:    ${apiShop}\nApikey:     ${key}\nID Mode:    ${idMode}\nCatalog rows: ${productScope}\nGMC_Feed_2 ID: ${secondaryIdMode}\nOrder statuses: ${statusIds.length ? statusIds.join(', ') : 'All'}`;
+    message = `GOMAG\nApiShop:    ${apiShop}\nApikey:     ${key}\nID Mode:    ${formatGomagIdModeLabel_(idMode)}\nCatalog rows: ${formatGomagProductScopeLabel_(productScope)}\nGMC_Feed_2 ID: ${formatGomagIdModeLabel_(secondaryIdMode) || 'Disabled'}\nOrder statuses: ${statusIds.length ? statusIds.join(', ') : 'All'}`;
   } else if (platform === 'ga4') {
     const gaId  = props.getProperty('GA4_PROPERTY_ID') || 'Not configured';
     message = `GOOGLE ANALYTICS 4\nProperty ID: ${gaId}`;
@@ -472,6 +472,19 @@ function viewStoreSettings() {
   }
 
   ui.alert(`Current Settings — Platform: ${platform}`, message, ui.ButtonSet.OK);
+}
+
+function formatGomagIdModeLabel_(value) {
+  const labels = {
+    sku: 'SKU',
+    product_id: 'Gomag Internal ID',
+    ean: 'EAN'
+  };
+  return labels[value] || '';
+}
+
+function formatGomagProductScopeLabel_(value) {
+  return value === 'parents' ? 'Parent products only' : 'Product versions / variants';
 }
 
 // ---------------------------------------------------------------------------

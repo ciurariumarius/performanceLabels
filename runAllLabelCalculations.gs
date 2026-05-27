@@ -5,7 +5,6 @@ const GADS_SHEET_NAME_SOURCE = "GAds";
 const SHOPIFY_SHEET_NAME_SOURCE = "Shopify";
 const WOOCOMMERCE_SHEET_NAME_SOURCE = "WooCommerce";
 const GOMAG_SHEET_NAME_SOURCE = "Gomag";
-const CATALOG_AUDIT_SHEET_NAME = "Catalog_Audit";
 
 const METRICS_HEADERS = [
   "id", "Title", "Date Created", "Price", "Revenue", "Revenue last 14 days", "Orders", "Stock Status", "Stock Qty",
@@ -130,12 +129,7 @@ function consolidateMetrics(ss) {
   const sourceData = sourceRows.filter(item => item.id);
   const skippedRows = sourceRows.length - sourceData.length;
   Logger.log(`Source rows loaded: Shopify=${shopifyData.length}, WooCommerce=${wooData.length}, Gomag=${gomagData.length}. Usable IDs=${sourceData.length}, skipped blank IDs=${skippedRows}.`);
-  writeCatalogAudit_(ss, { shopifyData, wooData, gomagData, sourceRows, sourceData });
-  if (skippedRows > 0) {
-    try {
-      appendToOverviewLog(ss, "Overview", "Catalog Audit", "WARNING", `Skipped ${skippedRows} source rows with blank product IDs. See ${CATALOG_AUDIT_SHEET_NAME}.`, "-");
-    } catch(e) {}
-  }
+  logCatalogAuditToOverview_(ss, { shopifyData, wooData, gomagData, sourceRows, sourceData });
   
   const combinedData = sourceData.map(item => {
     const safeId = String(item.id).toLowerCase();
@@ -348,52 +342,47 @@ function readStoreSourceRows_(sheet, sourceName, mapping) {
   });
 }
 
-function writeCatalogAudit_(ss, audit) {
-  const sheet = getOrCreateSheet(ss, CATALOG_AUDIT_SHEET_NAME);
-  sheet.clear();
+function logCatalogAuditToOverview_(ss, audit) {
   const props = PropertiesService.getScriptProperties();
-
-  const now = new Date();
   const sources = [
     ['Shopify', audit.shopifyData],
     ['WooCommerce', audit.wooData],
     ['Gomag', audit.gomagData]
   ];
 
-  const summaryHeaders = ['Checked At', 'Source', 'Total Rows', 'Usable IDs', 'Blank IDs', 'Products With Orders', 'Products Without Orders'];
-  const summaryRows = sources.map(([source, rows]) => {
-    const usable = rows.filter(item => item.id).length;
-    const withOrders = rows.filter(item => item.id && parseIntSafe(item.orders, 0) > 0).length;
-    warnOnCatalogDrop_(ss, props, source, usable);
-    return [
-      now,
-      source,
-      rows.length,
-      usable,
-      rows.length - usable,
-      withOrders,
-      usable - withOrders
-    ];
-  });
+  const summaries = sources
+    .filter(([, rows]) => rows.length > 0)
+    .map(([source, rows]) => {
+      const usable = rows.filter(item => item.id).length;
+      const withOrders = rows.filter(item => item.id && parseIntSafe(item.orders, 0) > 0).length;
+      warnOnCatalogDrop_(ss, props, source, usable);
+      return `${source}: rows ${rows.length}, usable ${usable}, blank ${rows.length - usable}, with orders ${withOrders}, without orders ${usable - withOrders}`;
+    });
 
-  sheet.getRange(1, 1, 1, summaryHeaders.length).setValues([summaryHeaders]).setFontWeight("bold");
-  if (summaryRows.length > 0) sheet.getRange(2, 1, summaryRows.length, summaryHeaders.length).setValues(summaryRows);
+  if (summaries.length > 0) {
+    try {
+      appendToOverviewLog(ss, "Overview", "Catalog Audit", "SUCCESS", summaries.join(" | "), "-");
+    } catch(e) {}
+  }
 
+  const skippedRows = audit.sourceRows.length - audit.sourceData.length;
   const skipped = audit.sourceRows
     .filter(item => !item.id)
-    .slice(0, 100)
+    .slice(0, 5)
     .map(item => [
       item.source || '',
       item.title || '',
-      item.price || '',
-      item.orders || '',
-      item.stockStatus || ''
+      item.price || ''
     ]);
 
-  const startRow = summaryRows.length + 4;
-  sheet.getRange(startRow, 1, 1, 5).setValues([['Skipped Blank-ID Samples', 'Title', 'Price', 'Orders', 'Stock Status']]).setFontWeight("bold");
-  if (skipped.length > 0) sheet.getRange(startRow + 1, 1, skipped.length, 5).setValues(skipped);
-  sheet.setFrozenRows(1);
+  if (skipped.length > 0) {
+    const sampleText = skipped
+      .map(sample => `${sample[0] || 'Unknown'}: ${sample[1] || '(no title)'}${sample[2] ? ` (${sample[2]})` : ''}`)
+      .join(" | ");
+    try {
+      appendToOverviewLog(ss, "Overview", "Catalog Audit", "WARNING", `Skipped ${skippedRows} source rows with blank product IDs. Samples: ${sampleText}`, "-");
+    } catch(e) {}
+  }
 }
 
 function warnOnCatalogDrop_(ss, props, source, usableCount) {
