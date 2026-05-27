@@ -49,6 +49,8 @@ CHANGELOG
 - Settings.html / MenuSetup.gs / GomagData.gs / runAllLabelCalculations.gs: Added Gomag settings for parent-only catalog rows and a secondary feed ID mode using SKU, Gomag internal ID, or EAN.
 - runAllLabelCalculations.gs: Moved catalog audit summaries and blank-ID samples into Overview logs instead of creating a separate Catalog_Audit sheet.
 - GoogleAdsData.html: Clarified that the spreadsheet URL in the copied Google Ads script is filled automatically from the current spreadsheet.
+- runAllLabelCalculations.gs: Added an Overview ID match audit comparing Google Ads product IDs against main platform Product IDs.
+- GomagData.gs / runAllLabelCalculations.gs: Merge duplicate Product IDs before writing Gomag, Metrics, and GMC feeds so labels and Google Ads metrics are unified per ID.
 
 2026-03-31
 ----------

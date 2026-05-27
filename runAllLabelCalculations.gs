@@ -124,15 +124,19 @@ function consolidateMetrics(ss) {
   const wooData = wooSheet ? getWooData_(wooSheet) : [];
   const gomagData = gomagSheet ? getGomagData_(gomagSheet) : [];
   const gadsMap = gadsSheet ? loadGAdsDataMap_(gadsSheet) : {};
+  const gadsIds = gadsSheet ? loadGAdsIds_(gadsSheet) : [];
   
   const sourceRows = [...shopifyData, ...wooData, ...gomagData];
   const sourceData = sourceRows.filter(item => item.id);
+  const aggregatedSourceData = aggregateSourceRowsById_(sourceData);
   const skippedRows = sourceRows.length - sourceData.length;
-  Logger.log(`Source rows loaded: Shopify=${shopifyData.length}, WooCommerce=${wooData.length}, Gomag=${gomagData.length}. Usable IDs=${sourceData.length}, skipped blank IDs=${skippedRows}.`);
-  logCatalogAuditToOverview_(ss, { shopifyData, wooData, gomagData, sourceRows, sourceData });
+  const duplicateRows = sourceData.length - aggregatedSourceData.length;
+  Logger.log(`Source rows loaded: Shopify=${shopifyData.length}, WooCommerce=${wooData.length}, Gomag=${gomagData.length}. Usable IDs=${sourceData.length}, unique IDs=${aggregatedSourceData.length}, duplicate IDs merged=${duplicateRows}, skipped blank IDs=${skippedRows}.`);
+  logCatalogAuditToOverview_(ss, { shopifyData, wooData, gomagData, sourceRows, sourceData, aggregatedSourceData });
+  logGAdsIdMatchAuditToOverview_(ss, aggregatedSourceData, gadsIds);
   
-  const combinedData = sourceData.map(item => {
-    const safeId = String(item.id).toLowerCase();
+  const combinedData = aggregatedSourceData.map(item => {
+    const safeId = normalizeAuditId_(item.id);
     const gads = gadsMap[safeId] || { imp: 0, click: 0, cost: 0, conv: 0, val: 0 };
     return [
       item.id,
@@ -174,12 +178,12 @@ function consolidateMetrics(ss) {
     const config = getAppConfig();
     const prefix = config.IdPrefix || "";
     const suffix = config.IdSuffix || "";
-    const hasSecondaryIds = sourceData.some(item => item.secondaryId);
+    const hasSecondaryIds = aggregatedSourceData.some(item => item.secondaryId);
     if (prefix || suffix || hasSecondaryIds) {
       const labelsSheet2 = getOrCreateSheet(ss, LABELS_SHEET_2_NAME);
       labelsSheet2.clear();
       labelsSheet2.getRange(1, 1, 1, 1).setValues([["id"]]).setFontWeight("bold");
-      const idColumnData2 = sourceData.map(item => {
+      const idColumnData2 = aggregatedSourceData.map(item => {
         const baseId = item.secondaryId || item.id;
         return [prefix + String(baseId) + suffix];
       });
@@ -279,18 +283,41 @@ function loadGAdsDataMap_(sheet) {
   const map = {};
   const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
   data.forEach(row => {
-    const id = row[indices.id];
-    if (id) {
-       map[String(id).toLowerCase()] = {
-         imp: parseFloatSafe(row[indices.imp]),
-         click: parseFloatSafe(row[indices.click]),
-         cost: parseFloatSafe(row[indices.cost]),
-         conv: parseFloatSafe(row[indices.conv]),
-         val: parseFloatSafe(row[indices.val])
-       };
+    const id = normalizeAuditId_(row[indices.id]);
+    if (!id) return;
+
+    if (!map[id]) {
+      map[id] = { imp: 0, click: 0, cost: 0, conv: 0, val: 0 };
     }
+
+    map[id].imp += parseFloatSafe(row[indices.imp]);
+    map[id].click += parseFloatSafe(row[indices.click]);
+    map[id].cost += parseFloatSafe(row[indices.cost]);
+    map[id].conv += parseFloatSafe(row[indices.conv]);
+    map[id].val += parseFloatSafe(row[indices.val]);
   });
   return map;
+}
+
+function loadGAdsIds_(sheet) {
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const idIndex = headers.indexOf("id");
+  if (idIndex === -1) {
+    throw new Error('GAds sheet is missing required column(s): id');
+  }
+
+  const values = sheet.getRange(2, idIndex + 1, sheet.getLastRow() - 1, 1).getValues();
+  const seen = {};
+  const ids = [];
+  values.forEach(row => {
+    const normalized = normalizeAuditId_(row[0]);
+    if (normalized && !seen[normalized]) {
+      seen[normalized] = true;
+      ids.push(normalized);
+    }
+  });
+  return ids;
 }
 
 function readStoreSourceRows_(sheet, sourceName, mapping) {
@@ -342,6 +369,44 @@ function readStoreSourceRows_(sheet, sourceName, mapping) {
   });
 }
 
+function aggregateSourceRowsById_(rows) {
+  const grouped = {};
+  const output = [];
+
+  (rows || []).forEach(item => {
+    const key = normalizeAuditId_(item && item.id);
+    if (!key) return;
+
+    if (!grouped[key]) {
+      grouped[key] = Object.assign({}, item);
+      output.push(grouped[key]);
+      return;
+    }
+
+    mergeSourceRowMetrics_(grouped[key], item);
+  });
+
+  return output;
+}
+
+function mergeSourceRowMetrics_(target, source) {
+  target.revenue = parseFloatSafe(target.revenue, 0) + parseFloatSafe(source.revenue, 0);
+  target.revenue14 = parseFloatSafe(target.revenue14, 0) + parseFloatSafe(source.revenue14, 0);
+  target.orders = parseIntSafe(target.orders, 0) + parseIntSafe(source.orders, 0);
+  target.stockQty = parseIntSafe(target.stockQty, 0) + parseIntSafe(source.stockQty, 0);
+
+  if (!target.title && source.title) target.title = source.title;
+  if (!target.dateCreated && source.dateCreated) target.dateCreated = source.dateCreated;
+  if (!parseFloatSafe(target.price, 0) && parseFloatSafe(source.price, 0)) target.price = source.price;
+  if (!target.secondaryId && source.secondaryId) target.secondaryId = source.secondaryId;
+
+  if (String(source.stockStatus || "").toLowerCase() === "instock") {
+    target.stockStatus = source.stockStatus;
+  } else if (!target.stockStatus && source.stockStatus) {
+    target.stockStatus = source.stockStatus;
+  }
+}
+
 function logCatalogAuditToOverview_(ss, audit) {
   const props = PropertiesService.getScriptProperties();
   const sources = [
@@ -383,6 +448,62 @@ function logCatalogAuditToOverview_(ss, audit) {
       appendToOverviewLog(ss, "Overview", "Catalog Audit", "WARNING", `Skipped ${skippedRows} source rows with blank product IDs. Samples: ${sampleText}`, "-");
     } catch(e) {}
   }
+
+  const duplicateRows = audit.sourceData.length - audit.aggregatedSourceData.length;
+  if (duplicateRows > 0) {
+    try {
+      appendToOverviewLog(ss, "Overview", "Catalog Audit", "WARNING", `Merged ${duplicateRows} duplicate source rows with the same Product ID before writing Metrics/GMC_Feed.`, "-");
+    } catch(e) {}
+  }
+}
+
+function logGAdsIdMatchAuditToOverview_(ss, sourceData, gadsIds) {
+  if (!gadsIds || gadsIds.length === 0) {
+    try {
+      appendToOverviewLog(ss, "Overview", "GAds ID Match - Main", "SUCCESS", "No GAds IDs to compare.", "-");
+    } catch(e) {}
+    return;
+  }
+
+  const mainIds = buildAuditIdSet_(sourceData, 'id');
+  logSingleGAdsIdMatchAudit_(ss, "GAds ID Match - Main", gadsIds, mainIds);
+}
+
+function logSingleGAdsIdMatchAudit_(ss, component, gadsIds, platformIdSet) {
+  const unmatched = [];
+  let matched = 0;
+
+  gadsIds.forEach(id => {
+    if (platformIdSet[id]) {
+      matched++;
+    } else {
+      unmatched.push(id);
+    }
+  });
+
+  const total = gadsIds.length;
+  const percent = total > 0 ? ((matched / total) * 100).toFixed(1) + "%" : "100%";
+  const status = unmatched.length === 0 ? "SUCCESS" : "WARNING";
+  const samples = unmatched.slice(0, 10);
+  const sampleText = samples.length ? ` Samples: ${samples.join(", ")}` : "";
+  const details = `GAds IDs: ${total}. Matched: ${matched}. Unmatched: ${unmatched.length}. Match rate: ${percent}.${sampleText}`;
+
+  try {
+    appendToOverviewLog(ss, "Overview", component, status, details, "-");
+  } catch(e) {}
+}
+
+function buildAuditIdSet_(rows, fieldName) {
+  const set = {};
+  (rows || []).forEach(row => {
+    const normalized = normalizeAuditId_(row && row[fieldName]);
+    if (normalized) set[normalized] = true;
+  });
+  return set;
+}
+
+function normalizeAuditId_(value) {
+  return String(value === null || value === undefined ? "" : value).trim().toLowerCase();
 }
 
 function warnOnCatalogDrop_(ss, props, source, usableCount) {

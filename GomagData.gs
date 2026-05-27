@@ -231,7 +231,7 @@ function executeGomagFetchOrdersPhase_(config, state, productMap, executionStart
 function executeGomagWriteDataPhase_(config, state, productMap, executionStart, ss) {
   const props = PropertiesService.getScriptProperties();
   const sheet = getOrCreateSheet(ss, GOMAG_DATA_SHEET_NAME);
-  const products = getUniqueGomagProducts_(productMap);
+  const products = aggregateGomagProductsByOutputId_(getUniqueGomagProducts_(productMap));
 
   if (state.writeStartIndex === 0) {
     sheet.clear();
@@ -389,6 +389,52 @@ function getUniqueGomagProducts_(productMap) {
     seen[key] = true;
     return true;
   });
+}
+
+function aggregateGomagProductsByOutputId_(products) {
+  const grouped = {};
+  const output = [];
+
+  (products || []).forEach(product => {
+    const id = String(product.id || "").trim();
+    if (!id) {
+      output.push(product);
+      return;
+    }
+
+    if (!grouped[id]) {
+      grouped[id] = Object.assign({}, product);
+      output.push(grouped[id]);
+      return;
+    }
+
+    mergeGomagProductMetrics_(grouped[id], product);
+  });
+
+  return output;
+}
+
+function mergeGomagProductMetrics_(target, source) {
+  target.orders = parseIntSafe(target.orders, 0) + parseIntSafe(source.orders, 0);
+  target.sold = parseIntSafe(target.sold, 0) + parseIntSafe(source.sold, 0);
+  target.rev = parseFloatSafe(target.rev, 0) + parseFloatSafe(source.rev, 0);
+  target.rev14 = parseFloatSafe(target.rev14, 0) + parseFloatSafe(source.rev14, 0);
+  target.stockQty = parseIntSafe(target.stockQty, 0) + parseIntSafe(source.stockQty, 0);
+
+  if (!target.name && source.name) target.name = source.name;
+  if (!target.category && source.category) target.category = source.category;
+  if (!target.dateCreated && source.dateCreated) target.dateCreated = source.dateCreated;
+  if (!parseFloatSafe(target.price, 0) && parseFloatSafe(source.price, 0)) target.price = source.price;
+  if (!target.secondaryId && source.secondaryId) target.secondaryId = source.secondaryId;
+  if (!target.internalId && source.internalId) target.internalId = source.internalId;
+  if (!target.sku && source.sku) target.sku = source.sku;
+  if (!target.ean && source.ean) target.ean = source.ean;
+
+  if (String(source.stockStatus || "").toLowerCase() === "instock") {
+    target.stockStatus = source.stockStatus;
+  } else if (!target.stockStatus && source.stockStatus) {
+    target.stockStatus = source.stockStatus;
+  }
 }
 
 function normalizeGomagProduct_(product, version, config) {
