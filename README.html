@@ -74,7 +74,13 @@
     <li>Catalog completeness checks are logged in <code>Overview</code>; no separate audit sheet is required.</li>
   </ul>
 
-  <h2>7. Publishing the Feed</h2>
+  <h2>7. Central Logging</h2>
+  <ul>
+    <li>Optional central logging is enabled only when <code>PL_CENTRAL_LOG_SHEET_URL</code> is set in the script code and the executing account can write to that sheet.</li>
+    <li>It appends important setup, run, warning, error, and audit events to your private central <code>Events</code> sheet.</li>
+  </ul>
+
+  <h2>8. Publishing the Feed</h2>
   <ul>
     <li>In Google Sheets, open <b>File -> Share -> Publish to web</b>.</li>
     <li>Select <code>GMC_Feed</code> and format <b>Comma-separated values (.csv)</b>.</li>

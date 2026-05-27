@@ -51,6 +51,11 @@
       border-radius: 4px;
       font-size: 13px;
     }
+    .values code {
+      display: inline-block;
+      margin: 1px 3px 3px 0;
+      white-space: nowrap;
+    }
   </style>
 </head>
 <body>
@@ -59,23 +64,77 @@
 
   <h2>Main Labels</h2>
   <table>
-    <tr><th>Label</th><th>Meaning</th><th>Default Output</th></tr>
-    <tr><td>Revenue Simple</td><td><code>has_revenue</code> or <code>no_revenue</code> based on store revenue in the selected timeframe.</td><td><code>custom_label_0</code></td></tr>
-    <tr><td>Price Interval</td><td>Groups products into price buckets using the configured price step.</td><td><code>custom_label_1</code></td></tr>
-    <tr><td>GAds ROAS</td><td>Labels Ads ROAS using Good ROAS and Bad ROAS thresholds.</td><td><code>custom_label_2</code></td></tr>
-    <tr><td>GAds CVR</td><td>Labels conversion rate using Good CVR and Bad CVR thresholds.</td><td><code>custom_label_3</code></td></tr>
-    <tr><td>GAds Clicks</td><td>Labels click volume using High Clicks and Low Clicks thresholds.</td><td><code>custom_label_4</code></td></tr>
+    <tr><th>Label</th><th>Meaning</th><th>Possible Values</th><th>Default Output</th></tr>
+    <tr>
+      <td>Revenue Simple</td>
+      <td>Shows whether the product has store revenue in the selected timeframe.</td>
+      <td class="values"><code>has_revenue</code><code>no_revenue</code></td>
+      <td><code>custom_label_0</code></td>
+    </tr>
+    <tr>
+      <td>Price Interval</td>
+      <td>Groups products into price buckets using the configured price step.</td>
+      <td class="values"><code>price_0_50</code><code>price_50_100</code><code>price_100_150</code> etc. based on the configured interval. Invalid prices output <code>invalid_price_data</code>.</td>
+      <td><code>custom_label_1</code></td>
+    </tr>
+    <tr>
+      <td>GAds ROAS</td>
+      <td>Labels Ads ROAS using Good ROAS and Bad ROAS thresholds.</td>
+      <td class="values"><code>high_roas</code><code>avg_roas</code><code>low_roas</code><code>no_roas</code></td>
+      <td><code>custom_label_2</code></td>
+    </tr>
+    <tr>
+      <td>GAds CVR</td>
+      <td>Labels conversion rate using Good CVR and Bad CVR thresholds.</td>
+      <td class="values"><code>high_cvr</code><code>avg_cvr</code><code>low_cvr</code><code>no_cvr</code></td>
+      <td><code>custom_label_3</code></td>
+    </tr>
+    <tr>
+      <td>GAds Clicks</td>
+      <td>Labels click volume using High Clicks and Low Clicks thresholds.</td>
+      <td class="values"><code>high_clicks</code><code>avg_clicks</code><code>low_clicks</code><code>no_clicks</code></td>
+      <td><code>custom_label_4</code></td>
+    </tr>
   </table>
 
   <h2>Optional Labels</h2>
   <table>
-    <tr><th>Label</th><th>Meaning</th></tr>
-    <tr><td>Revenue Advanced</td><td>Compares each product revenue against account average revenue.</td></tr>
-    <tr><td>Orders</td><td>Classifies products by order count using the High Orders threshold.</td></tr>
-    <tr><td>Available Variants</td><td>Groups related variants when the source platform provides variant-level rows.</td></tr>
-    <tr><td>Trend</td><td>Compares recent 14-day revenue against the older part of the selected timeframe.</td></tr>
-    <tr><td>New Product</td><td>Marks products newer than the configured New Product Days window.</td></tr>
-    <tr><td>Performance Index</td><td>Combines store revenue, Ads cost, ROAS, orders, and price into a performance classification.</td></tr>
+    <tr><th>Label</th><th>Meaning</th><th>Possible Values</th></tr>
+    <tr>
+      <td>Revenue Advanced</td>
+      <td>Compares each product revenue against account average revenue.</td>
+      <td class="values"><code>high_revenue</code><code>avg_revenue</code><code>low_revenue</code><code>no_revenue</code></td>
+    </tr>
+    <tr>
+      <td>Orders</td>
+      <td>Classifies products by order count using the High Orders threshold.</td>
+      <td class="values"><code>high_orders</code><code>average_orders</code><code>one_order</code><code>no_orders</code></td>
+    </tr>
+    <tr>
+      <td>Available Variants</td>
+      <td>Shows in-stock variants over total variants for related products.</td>
+      <td class="values">Dynamic ratio such as <code>0/3</code><code>1/3</code><code>2/3</code><code>3/3</code>. Blank when no ID/parent can be resolved.</td>
+    </tr>
+    <tr>
+      <td>Trend</td>
+      <td>Compares recent 14-day revenue against the older part of the selected timeframe.</td>
+      <td class="values"><code>up_trend</code><code>stable_trend</code><code>down_trend</code><code>recent_activity_only</code><code>no_trend</code></td>
+    </tr>
+    <tr>
+      <td>New Product</td>
+      <td>Marks products newer than the configured New Product Days window.</td>
+      <td class="values"><code>new_product</code><code>invalid_date</code> or blank for older products.</td>
+    </tr>
+    <tr>
+      <td>Performance Index</td>
+      <td>Combines store revenue, Ads cost, ROAS, orders, and price into a performance classification.</td>
+      <td class="values"><code>INDEX</code><code>NEAR-INDEX</code><code>LOW-INDEX</code><code>NO-INDEX</code><code>EXCLUDE-INDEX</code></td>
+    </tr>
+    <tr>
+      <td>Site ROAS</td>
+      <td>Numeric helper output used by Performance Index.</td>
+      <td class="values">A numeric value such as <code>0.00</code><code>2.35</code><code>12.80</code>.</td>
+    </tr>
   </table>
 
   <h2>Important Notes</h2>

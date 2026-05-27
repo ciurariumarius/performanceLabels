@@ -12,5 +12,6 @@ function getGoogleAdsScriptContent() {
 
   return match[1]
     .replace(/const SPREADSHEET_URL = ".*?";/, `const SPREADSHEET_URL = "${SpreadsheetApp.getActiveSpreadsheet().getUrl()}";`)
+    .replace(/const PL_CENTRAL_LOG_SHEET_URL = ".*?";/, `const PL_CENTRAL_LOG_SHEET_URL = "${PL_CENTRAL_LOG_SHEET_URL}";`)
     .trim();
 }

@@ -119,6 +119,12 @@ function setupPlatformAutoFetch_(platform) {
 
   const msg = `${config.label} Auto-Fetch ${alreadyScheduled ? 'already scheduled' : 'scheduled'}: daily start${config.worker ? ' + 5-minute worker' : ''}.`;
   console.log(msg);
+  logCentralEvent_({
+    component: "Auto-Fetch Setup",
+    status: alreadyScheduled ? "SUCCESS" : "COMPLETED",
+    details: msg,
+    eventSource: "setupPlatformAutoFetch"
+  });
   try { SpreadsheetApp.getActiveSpreadsheet().toast(msg); } catch (e) {}
   return getPlatformTriggerStatus_(platform);
 }
@@ -140,6 +146,12 @@ function repairManualWorkerTrigger_(platform) {
   }
 
   savePlatformTriggerMetadata_(platform, 'manual_worker');
+  logCentralEvent_({
+    component: "Auto-Fetch Setup",
+    status: "SUCCESS",
+    details: `${config.label} manual worker trigger repaired for Run Now.`,
+    eventSource: "repairManualWorkerTrigger"
+  });
   return getPlatformTriggerStatus_(platform);
 }
 

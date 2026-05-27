@@ -9,6 +9,13 @@
 // =========================================================================================
 // --- Default configuration (Fallbacks for script duplication) ---
 // =========================================================================================
+// Optional: paste your private central logging spreadsheet URL here.
+// The account executing this script must have write access to that spreadsheet.
+const PL_CENTRAL_LOG_SHEET_URL = "";
+const PL_CENTRAL_LOG_TAB = "Events";
+const PL_SCRIPT_VERSION = "2026-05-27";
+const PL_CENTRAL_INSTALL_LOGGED_AT = "PL_CENTRAL_INSTALL_LOGGED_AT";
+
 const DEFAULT_LABEL_CONFIG = {
   Platform: '',
   TimeframeDays: 30,
@@ -499,6 +506,15 @@ function updateDashboardStatus(spreadsheet, sheetName, status, message) {
     sheet.getRange("B3").setValue(formatDisplayDateTime(new Date()));
     sheet.getRange("C2").setValue(""); // clear message on complete
   }
+
+  if (shouldLogCentralStatus_(status)) {
+    logCentralEvent_({
+      component: sheetName,
+      status: status,
+      details: message || "",
+      eventSource: "updateDashboardStatus"
+    });
+  }
 }
 
 /**
@@ -560,6 +576,176 @@ function appendToOverviewLog(spreadsheet, sheetName, component, status, details,
       try { sheet.deleteRows(513, rowsToDelete); } catch(e) {}
     }
   }
+
+  logCentralEvent_({
+    component: component,
+    status: status,
+    details: details,
+    timeframe: timeframe,
+    eventSource: "appendToOverviewLog"
+  });
+}
+
+function logCentralInstallSeen_() {
+  try {
+    if (!isCentralLoggingEnabled_()) return;
+
+    const props = PropertiesService.getScriptProperties();
+    if (props.getProperty(PL_CENTRAL_INSTALL_LOGGED_AT)) return;
+
+    const timestamp = new Date().toISOString();
+    props.setProperty(PL_CENTRAL_INSTALL_LOGGED_AT, timestamp);
+
+    logCentralEvent_({
+      component: "Install",
+      status: "INSTALL_SEEN",
+      details: "First authorized central logging event for this spreadsheet.",
+      eventSource: "install"
+    });
+  } catch (e) {
+    console.warn("Central install logging failed: " + e.message);
+  }
+}
+
+function logCentralEvent_(event) {
+  try {
+    if (!isCentralLoggingEnabled_()) return;
+
+    const lock = LockService.getScriptLock();
+    if (!lock.tryLock(250)) return;
+
+    try {
+      const centralSs = SpreadsheetApp.openByUrl(PL_CENTRAL_LOG_SHEET_URL);
+      const sheet = getOrCreateSheet(centralSs, PL_CENTRAL_LOG_TAB);
+      initializeCentralLogSheet_(sheet);
+
+      const context = getCentralLogContext_();
+      const now = new Date();
+      const props = PropertiesService.getScriptProperties();
+
+      if (!props.getProperty(PL_CENTRAL_INSTALL_LOGGED_AT)) {
+        props.setProperty(PL_CENTRAL_INSTALL_LOGGED_AT, now.toISOString());
+        sheet.appendRow(buildCentralLogRow_(now, context, {
+          component: "Install",
+          status: "INSTALL_SEEN",
+          details: "First authorized central logging event for this spreadsheet.",
+          timeframe: "-",
+          eventSource: "install"
+        }));
+      }
+
+      sheet.appendRow(buildCentralLogRow_(now, context, event));
+    } finally {
+      lock.releaseLock();
+    }
+  } catch (e) {
+    console.warn("Central logging failed: " + e.message);
+  }
+}
+
+function buildCentralLogRow_(date, context, event) {
+  return [
+    formatDisplayDateTime(date),
+    Utilities.getUuid ? Utilities.getUuid() : String(date.getTime()),
+    context.spreadsheetId,
+    context.websiteUrl,
+    context.platform,
+    sanitizeCentralLogValue_(event && event.component),
+    sanitizeCentralLogValue_(event && event.status),
+    sanitizeCentralLogValue_(event && event.details),
+    sanitizeCentralLogValue_((event && event.timeframe) !== undefined ? event.timeframe : "-"),
+    context.activeSpreadsheetUrl,
+    PL_SCRIPT_VERSION,
+    sanitizeCentralLogValue_(event && event.eventSource)
+  ];
+}
+
+function initializeCentralLogSheet_(sheet) {
+  const headers = [
+    "Timestamp",
+    "Event ID",
+    "Source Spreadsheet ID",
+    "Website URL",
+    "Platform",
+    "Component",
+    "Status",
+    "Details",
+    "Timeframe Days",
+    "Active Sheet URL",
+    "Script Version",
+    "Event Source"
+  ];
+
+  const existing = sheet.getRange(1, 1, 1, headers.length).getValues()[0];
+  const hasHeaders = existing.some(value => String(value || "").trim());
+  if (!hasHeaders) {
+    sheet.getRange(1, 1, 1, headers.length)
+      .setValues([headers])
+      .setFontWeight("bold")
+      .setBackground("#e8f0fe");
+    sheet.setFrozenRows(1);
+  }
+}
+
+function getCentralLogContext_() {
+  const props = PropertiesService.getScriptProperties();
+  const platform = getCentralLogPlatform_(props);
+  let activeSs = null;
+
+  try {
+    activeSs = SpreadsheetApp.getActiveSpreadsheet();
+  } catch (e) {}
+
+  return {
+    spreadsheetId: activeSs ? activeSs.getId() : "",
+    activeSpreadsheetUrl: activeSs ? activeSs.getUrl() : "",
+    platform: platform,
+    websiteUrl: getCentralLogWebsiteUrl_(props, platform)
+  };
+}
+
+function getCentralLogPlatform_(props) {
+  try {
+    const stored = props.getProperty("PLATFORM");
+    return stored || "";
+  } catch (e) {
+    return "";
+  }
+}
+
+function getCentralLogWebsiteUrl_(props, platform) {
+  const platformUrl = {
+    woocommerce: props.getProperty("WOOCOMMERCE_DOMAIN") || "",
+    shopify: props.getProperty("SHOPIFY_DOMAIN") || "",
+    gomag: props.getProperty("GOMAG_API_SHOP") || "",
+    ga4: ""
+  };
+
+  if (platformUrl[platform]) return platformUrl[platform];
+  return props.getProperty("GOMAG_API_SHOP") ||
+    props.getProperty("SHOPIFY_DOMAIN") ||
+    props.getProperty("WOOCOMMERCE_DOMAIN") ||
+    "";
+}
+
+function sanitizeCentralLogValue_(value) {
+  let text = value === null || value === undefined ? "" : String(value);
+  text = text
+    .replace(/(api[_ -]?key|apikey|api[_ -]?secret|secret|token|password|authorization)(["'\s:=]+)([^,\s"'}]+)/gi, "$1$2[REDACTED]")
+    .replace(/(ck|cs)_[a-z0-9_%-]{12,}/gi, "$1_[REDACTED]")
+    .replace(/shpat_[a-z0-9_%-]+/gi, "shpat_[REDACTED]");
+
+  if (text.length > 1500) return text.slice(0, 1500) + "... [truncated]";
+  return text;
+}
+
+function shouldLogCentralStatus_(status) {
+  const normalized = String(status || "").toUpperCase();
+  return ["STARTED", "ERROR", "WARNING", "PAUSED", "PARTIAL", "COMPLETED"].indexOf(normalized) !== -1;
+}
+
+function isCentralLoggingEnabled_() {
+  return !!String(PL_CENTRAL_LOG_SHEET_URL || "").trim();
 }
 
 // =========================================================================================

@@ -59,6 +59,12 @@ function runMainSync() {
 function runActivePlatformOrSetup() {
   const status = getSetupStatus();
   if (!status.platformConfigured || !status.credentials.done) {
+    logCentralEvent_({
+      component: "Manual Run",
+      status: "WARNING",
+      details: status.platformConfigured ? status.credentials.detail : "Run Now opened setup because no platform is configured.",
+      eventSource: "runActivePlatformOrSetup"
+    });
     showSetupGuide();
     return;
   }
@@ -79,6 +85,14 @@ function runActivePlatformDataOnly() {
 function runActivePlatform_(skipLabelsOnce) {
   const platform = getActivePlatform();
   const props = PropertiesService.getScriptProperties();
+
+  logCentralEvent_({
+    component: "Manual Run",
+    status: "STARTED",
+    details: `Manual run started for ${platform || "unknown platform"}${skipLabelsOnce ? " (platform data only)" : ""}.`,
+    timeframe: getAppConfig().TimeframeDays,
+    eventSource: "runActivePlatform"
+  });
 
   if (skipLabelsOnce && platform !== 'ga4') {
     props.setProperty('SKIP_LABELS_ONCE', 'true');
@@ -212,6 +226,12 @@ function openOverviewSheet() {
 function setupActivePlatformAutoFetch() {
   const status = getSetupStatus();
   if (!status.platformConfigured || !status.credentials.done) {
+    logCentralEvent_({
+      component: "Auto-Fetch Setup",
+      status: "WARNING",
+      details: status.platformConfigured ? status.credentials.detail : "Auto-fetch setup opened setup because no platform is configured.",
+      eventSource: "setupActivePlatformAutoFetch"
+    });
     showSetupGuide();
     return;
   }
@@ -328,6 +348,13 @@ function saveSettingsFromDialog(payload) {
     // If we want them to clear it, we could use setProperty('GA4_PROPERTY_ID', '') instead.
     props.setProperty('GA4_PROPERTY_ID', payload.ga4PropertyId || '');
   }
+
+  logCentralEvent_({
+    component: "Platform Settings",
+    status: "SUCCESS",
+    details: `Settings saved for ${payload.platform || getActivePlatform() || "unknown platform"}.`,
+    eventSource: "saveSettingsFromDialog"
+  });
 }
 
 function parseJsonProperty_(props, key, fallback) {
@@ -441,6 +468,14 @@ function saveLabelSettingsFromDialog(payload) {
   props.setProperty('CFG_OUT_TREND', payload.outTrend);
   props.setProperty('CFG_OUT_NEW', payload.outNewProduct);
   props.setProperty('CFG_OUT_PERF', payload.outPerfIndex);
+
+  logCentralEvent_({
+    component: "Label Settings",
+    status: "SUCCESS",
+    details: `Label settings saved. Timeframe: ${payload.timeframeDays || "-"} days.`,
+    timeframe: payload.timeframeDays || "-",
+    eventSource: "saveLabelSettingsFromDialog"
+  });
 }
 
 // ---------------------------------------------------------------------------
