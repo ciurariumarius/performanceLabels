@@ -34,6 +34,13 @@
     .btn-primary:hover { background: #1765cc; box-shadow: 0 1px 3px rgba(60,64,67,0.3); }
     .btn-secondary { background: #fff; color: #1a73e8; border: 1px solid #dadce0; }
     .btn-secondary:hover { background: #f1f3f4; }
+    .btn:disabled { opacity: .65; cursor: wait; }
+    .spinner {
+      display: inline-block; width: 12px; height: 12px; margin-right: 7px;
+      border: 2px solid rgba(255,255,255,.55); border-top-color: #fff;
+      border-radius: 50%; vertical-align: -2px; animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
     
     #status { font-size: 13px; font-weight: 500; color: #188038; display: none; margin-right: auto; }
     #error { font-size: 13px; font-weight: 500; color: #c5221f; display: none; margin-right: auto; }
@@ -157,8 +164,8 @@
   <div class="footer">
     <div id="status">✅ Saved successfully!</div>
     <div id="error"></div>
-    <button class="btn btn-secondary" onclick="google.script.host.close()">Cancel</button>
-    <button class="btn btn-primary" onclick="saveData()">Save Changes</button>
+    <button class="btn btn-secondary" id="cancel-btn" onclick="google.script.host.close()">Cancel</button>
+    <button class="btn btn-primary" id="save-btn" onclick="saveData()">Save Changes</button>
   </div>
 
   <script>
@@ -227,17 +234,31 @@
 
       document.getElementById('status').style.display = 'none';
       document.getElementById('error').style.display = 'none';
+      setSavingState(true);
 
       google.script.run
         .withSuccessHandler(function() {
+          setSavingState(false);
           document.getElementById('status').style.display = 'inline-block';
           setTimeout(function() { google.script.host.close(); }, 1200);
         })
         .withFailureHandler(function(e) {
+          setSavingState(false);
           document.getElementById('error').style.display = 'inline-block';
           document.getElementById('error').textContent = '❌ ' + e.message;
         })
         .saveLabelSettingsFromDialog(payload);
+    }
+
+    function setSavingState(isSaving) {
+      var saveBtn = document.getElementById('save-btn');
+      var cancelBtn = document.getElementById('cancel-btn');
+      saveBtn.disabled = isSaving;
+      cancelBtn.disabled = isSaving;
+      saveBtn.innerHTML = isSaving ? '<span class="spinner"></span>Saving...' : 'Save Changes';
+      document.getElementById('status').textContent = isSaving ? 'Saving label settings...' : '✅ Saved successfully!';
+      document.getElementById('status').style.display = isSaving ? 'inline-block' : 'none';
+      document.getElementById('status').style.color = isSaving ? '#5f6368' : '#188038';
     }
   </script>
 </body>

@@ -23,6 +23,14 @@
     button.primary { background: #1a73e8; color: #fff; border-color: #1a73e8; }
     button:hover { background: #f1f3f4; }
     button.primary:hover { background: #1765cc; }
+    button:disabled { opacity: .65; cursor: wait; }
+    .spinner {
+      display: inline-block; width: 12px; height: 12px; margin-right: 7px;
+      border: 2px solid rgba(26,115,232,.25); border-top-color: #1a73e8;
+      border-radius: 50%; vertical-align: -2px; animation: spin .8s linear infinite;
+    }
+    button.primary .spinner { border-color: rgba(255,255,255,.55); border-top-color: #fff; }
+    @keyframes spin { to { transform: rotate(360deg); } }
     #error { color: #c5221f; margin-top: 12px; display: none; }
   </style>
 </head>
@@ -33,7 +41,7 @@
       <div class="summary">Active platform: <span id="platform" class="platform">Loading...</span></div>
     </div>
     <div class="actions-top">
-      <button onclick="refresh()">Check Status</button>
+      <button onclick="refresh(this)">Check Status</button>
     </div>
   </div>
 
@@ -59,7 +67,7 @@
         '<div class="step-title">' + title + '</div>',
         '<div class="step-detail">' + status.detail + '</div>',
         '</div>',
-        '<button onclick="' + actionName + '()">' + actionLabel + '</button>',
+        '<button onclick="' + actionName + '(this)">' + actionLabel + '</button>',
         '</div>'
       ].join('');
     }
@@ -74,11 +82,18 @@
       ].join('');
     }
 
-    function refresh() {
+    function refresh(button) {
       document.getElementById('error').style.display = 'none';
+      setButtonWorking(button, true, 'Checking...');
       google.script.run
-        .withSuccessHandler(render)
-        .withFailureHandler(showError)
+        .withSuccessHandler(function(data) {
+          setButtonWorking(button, false);
+          render(data);
+        })
+        .withFailureHandler(function(error) {
+          setButtonWorking(button, false);
+          showError(error);
+        })
         .getSetupStatus();
     }
 
@@ -88,26 +103,62 @@
       el.style.display = 'block';
     }
 
-    function openSettings() {
-      google.script.run.showSettingsDialog();
-      google.script.host.close();
+    function openSettings(button) {
+      openModalWithFeedback(button, 'Opening...', 'showSettingsDialog');
     }
 
-    function openLabelSettings() {
-      google.script.run.showLabelSettingsDialog();
-      google.script.host.close();
+    function openLabelSettings(button) {
+      openModalWithFeedback(button, 'Opening...', 'showLabelSettingsDialog');
     }
 
-    function openAdsScript() {
-      google.script.run.showAdsScriptModal();
-      google.script.host.close();
+    function openAdsScript(button) {
+      openModalWithFeedback(button, 'Opening...', 'showAdsScriptModal');
     }
 
-    function setupSchedule() {
+    function setupSchedule(button) {
+      setButtonWorking(button, true, 'Scheduling...');
       google.script.run
-        .withSuccessHandler(refresh)
-        .withFailureHandler(showError)
+        .withSuccessHandler(function() {
+          setButtonWorking(button, false);
+          refresh();
+        })
+        .withFailureHandler(function(error) {
+          setButtonWorking(button, false);
+          showError(error);
+        })
         .setupActivePlatformAutoFetch();
+    }
+
+    function openModalWithFeedback(button, label, serverFunctionName) {
+      setButtonWorking(button, true, label);
+      var runner = google.script.run
+        .withSuccessHandler(function() {
+          google.script.host.close();
+        })
+        .withFailureHandler(function(error) {
+          setButtonWorking(button, false);
+          showError(error);
+        });
+
+      if (serverFunctionName === 'showSettingsDialog') {
+        runner.showSettingsDialog();
+      } else if (serverFunctionName === 'showLabelSettingsDialog') {
+        runner.showLabelSettingsDialog();
+      } else {
+        runner.showAdsScriptModal();
+      }
+    }
+
+    function setButtonWorking(button, isWorking, label) {
+      if (!button) return;
+      if (isWorking) {
+        button.dataset.originalText = button.dataset.originalText || button.textContent;
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner"></span>' + (label || 'Working...');
+      } else {
+        button.disabled = false;
+        button.textContent = button.dataset.originalText || button.textContent;
+      }
     }
 
     refresh();

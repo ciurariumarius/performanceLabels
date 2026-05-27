@@ -68,6 +68,10 @@
       .copy-btn:active {
         background-color: #1557b0;
       }
+      .copy-btn:disabled {
+        opacity: .8;
+        cursor: default;
+      }
       .footer {
         margin-top: 20px;
         text-align: right;
@@ -128,10 +132,12 @@
         const btn = document.getElementById('copyBtn');
         const originalText = btn.innerText;
         btn.innerText = '✅ Copied!';
+        btn.disabled = true;
         btn.style.backgroundColor = '#0f9d58';
         
         setTimeout(() => {
           btn.innerText = originalText;
+          btn.disabled = false;
           btn.style.backgroundColor = '#1a73e8';
         }, 2000);
       }
