@@ -133,7 +133,7 @@ function consolidateMetrics(ss) {
   const aggregatedSourceData = aggregateSourceRowsById_(matchedSourceData);
   const skippedRows = sourceRows.length - sourceData.length;
   const duplicateRows = matchedSourceData.length - aggregatedSourceData.length;
-  Logger.log(`Source rows loaded: Shopify=${shopifyData.length}, WooCommerce=${wooData.length}, Gomag=${gomagData.length}. Usable IDs=${sourceData.length}, unique IDs=${aggregatedSourceData.length}, fallback ID matches=${remapResult.fallbackMatches}, duplicate IDs merged=${duplicateRows}, skipped blank IDs=${skippedRows}.`);
+  Logger.log(`Source rows loaded: Shopify=${shopifyData.length}, WooCommerce=${wooData.length}, Gomag=${gomagData.length}. Usable IDs=${sourceData.length}, unique IDs=${aggregatedSourceData.length}, Google Ads fallback matches=${remapResult.fallbackMatches}, duplicate IDs merged=${duplicateRows}, skipped blank IDs=${skippedRows}.`);
   logCatalogAuditToOverview_(ss, { shopifyData, wooData, gomagData, sourceRows, sourceData: matchedSourceData, aggregatedSourceData });
   logGAdsIdMatchAuditToOverview_(ss, aggregatedSourceData, gadsIds);
   
@@ -452,7 +452,7 @@ function logGAdsFallbackMatchOverview_(ss, result, config) {
 
   const modeLabel = getMatchGAdsModeLabel_(config.MatchGAdsIds.Mode) || config.MatchGAdsIds.Mode || "fallback";
   const sampleText = result.samples.length ? ` Unmatched samples: ${result.samples.join(", ")}` : "";
-  const details = `Mode: ${modeLabel}. Main matches: ${result.mainMatches}. Fallback matches: ${result.fallbackMatches}. Still unmatched: ${result.unmatched}.${sampleText}`;
+  const details = `Google Ads fallback: ${modeLabel}. Default Feed ID matches: ${result.mainMatches}. Fallback matches: ${result.fallbackMatches}. Still unmatched: ${result.unmatched}.${sampleText}`;
   const status = result.fallbackMatches > 0 || result.unmatched === 0 ? "SUCCESS" : "WARNING";
 
   try {

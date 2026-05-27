@@ -457,7 +457,8 @@ function viewStoreSettings() {
     const domain = props.getProperty('SHOPIFY_DOMAIN') || 'Not configured';
     const id     = props.getProperty('SHOPIFY_CLIENT_ID')     ? '••••' + props.getProperty('SHOPIFY_CLIENT_ID').slice(-4)     : 'Not configured';
     const secret = props.getProperty('SHOPIFY_CLIENT_SECRET') ? '••••' + props.getProperty('SHOPIFY_CLIENT_SECRET').slice(-4) : 'Not configured';
-    message = `🛍️ SHOPIFY\nDomain:     ${domain}\nAPI Key/ID: ${id}\nSecret:     ${secret}\nMatch GAds IDs: ${formatMatchGAdsStatus_(props)}`;
+    const defaultFeedId = formatShopifyDefaultFeedIdLabel_(props.getProperty('CFG_SHOPIFY_FORMAT') || DEFAULT_LABEL_CONFIG.Shopify.ProductIdFormat);
+    message = `🛍️ SHOPIFY\nDomain:     ${domain}\nAPI Key/ID: ${id}\nSecret:     ${secret}\nDefault Feed ID: ${defaultFeedId}\nGoogle Ads ID fallback: ${formatMatchGAdsStatus_(props)}`;
   } else if (platform === 'gomag') {
     const apiShop = props.getProperty('GOMAG_API_SHOP') || 'Not configured';
     const key = props.getProperty('GOMAG_API_KEY') ? '••••' + props.getProperty('GOMAG_API_KEY').slice(-4) : 'Not configured';
@@ -465,7 +466,7 @@ function viewStoreSettings() {
     const productScope = props.getProperty('CFG_GOMAG_PRODUCT_SCOPE') || DEFAULT_LABEL_CONFIG.Gomag.ProductScope;
     const secondaryIdMode = props.getProperty('CFG_GOMAG_SECONDARY_ID_MODE') || '';
     const statusIds = parseCommaList_(props.getProperty('CFG_GOMAG_ORDER_STATUS_IDS') || '');
-    message = `GOMAG\nApiShop:    ${apiShop}\nApikey:     ${key}\nID Mode:    ${formatGomagIdModeLabel_(idMode)}\nCatalog rows: ${formatGomagProductScopeLabel_(productScope)}\nGMC_Feed_2 ID: ${formatGomagIdModeLabel_(secondaryIdMode) || 'Disabled'}\nMatch GAds IDs: ${formatMatchGAdsStatus_(props)}\nOrder statuses: ${statusIds.length ? statusIds.join(', ') : 'All'}`;
+    message = `GOMAG\nApiShop:    ${apiShop}\nApikey:     ${key}\nDefault Feed ID: ${formatGomagIdModeLabel_(idMode)}\nCatalog rows: ${formatGomagProductScopeLabel_(productScope)}\nGMC_Feed_2 ID: ${formatGomagIdModeLabel_(secondaryIdMode) || 'Disabled'}\nGoogle Ads ID fallback: ${formatMatchGAdsStatus_(props)}\nOrder statuses: ${statusIds.length ? statusIds.join(', ') : 'All'}`;
   } else if (platform === 'ga4') {
     const gaId  = props.getProperty('GA4_PROPERTY_ID') || 'Not configured';
     message = `GOOGLE ANALYTICS 4\nProperty ID: ${gaId}`;
@@ -473,7 +474,7 @@ function viewStoreSettings() {
     const domain = props.getProperty('WOOCOMMERCE_DOMAIN') || 'Not configured';
     const key    = props.getProperty('WOOCOMMERCE_API_KEY')    ? '••••' + props.getProperty('WOOCOMMERCE_API_KEY').slice(-4)    : 'Not configured';
     const secret = props.getProperty('WOOCOMMERCE_API_SECRET') ? '••••' + props.getProperty('WOOCOMMERCE_API_SECRET').slice(-4) : 'Not configured';
-    message = `🛒 WOOCOMMERCE\nDomain:     ${domain}\nAPI Key:    ${key}\nSecret:     ${secret}\nMatch GAds IDs: ${formatMatchGAdsStatus_(props)}`;
+    message = `🛒 WOOCOMMERCE\nDomain:     ${domain}\nAPI Key:    ${key}\nSecret:     ${secret}\nDefault Feed ID: Product ID\nGoogle Ads ID fallback: ${formatMatchGAdsStatus_(props)}`;
   } else {
     ui.alert(
       'Platform not configured',
@@ -497,6 +498,15 @@ function formatGomagIdModeLabel_(value) {
 
 function formatGomagProductScopeLabel_(value) {
   return value === 'parents' ? 'Parent products only' : 'Product versions / variants';
+}
+
+function formatShopifyDefaultFeedIdLabel_(value) {
+  const labels = {
+    shopify: 'Shopify standard ID',
+    variant_id: 'Variant ID',
+    parent_id: 'Parent ID'
+  };
+  return labels[value] || 'Shopify standard ID';
 }
 
 function formatMatchGAdsStatus_(props) {

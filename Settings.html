@@ -57,6 +57,17 @@
       display: flex; align-items: center; gap: 8px; font-weight: 500;
       margin-bottom: 6px; color: #3c4043;
     }
+    .panel {
+      border: 1px solid #e8eaed; border-radius: 8px; padding: 12px;
+      background: #f8fafd; margin-bottom: 16px;
+    }
+    .panel-title { font-size: 14px; font-weight: 700; color: #1a73e8; margin-bottom: 4px; }
+    .subsection { display: none; }
+    .subsection.visible { display: block; }
+    .readonly-value {
+      padding: 7px 10px; border: 1px solid #dadce0; border-radius: 4px;
+      background: #f1f3f4; color: #3c4043; font-size: 13px;
+    }
     .empty-state {
       padding: 10px; border: 1px dashed #dadce0; border-radius: 6px;
       color: #5f6368; font-size: 12px; line-height: 1.4; background: #f8f9fa;
@@ -105,13 +116,48 @@
 
   <hr class="divider">
 
-  <div id="section-gads-match" class="platform-section">
+  <div id="section-product-id" class="platform-section panel">
+    <div class="panel-title">Product ID Matching</div>
+    <div class="hint" id="product-id-preview"></div>
+
+    <div id="default-id-woocommerce" class="subsection section">
+      <label>Default Feed ID</label>
+      <div class="hint">This is the ID written to Metrics and GMC_Feed by default.</div>
+      <div class="readonly-value">Product ID</div>
+    </div>
+
+    <div id="default-id-shopify" class="subsection section">
+      <label>Default Feed ID</label>
+      <div class="hint">This is the ID written to Metrics and GMC_Feed by default.</div>
+      <select id="shopify-format">
+        <option value="shopify">Shopify standard ID</option>
+        <option value="variant_id">Variant ID</option>
+        <option value="parent_id">Parent ID</option>
+      </select>
+    </div>
+    <div id="shopify-country-section" class="subsection section">
+      <label>Shopify Country Code</label>
+      <div class="hint">Used only for Shopify standard ID: shopify_{COUNTRY}_{productId}_{variantId}</div>
+      <input type="text" id="shopify-country-code" placeholder="e.g. zz, us, de">
+    </div>
+
+    <div id="default-id-gomag" class="subsection section">
+      <label>Default Feed ID</label>
+      <div class="hint">This is the ID written to Metrics and GMC_Feed by default. Gomag orders are still matched internally by Gomag product ID.</div>
+      <select id="gomag-id-mode">
+        <option value="sku">SKU</option>
+        <option value="product_id">Gomag Internal ID</option>
+        <option value="ean">EAN</option>
+      </select>
+    </div>
+
     <div class="section">
       <label class="inline-check">
         <input type="checkbox" id="match-gads-enabled">
-        <span>Match Google Ads IDs</span>
+        <span>Use Google Ads ID when available</span>
       </label>
-      <div class="hint">If Google Ads IDs do not match the main Product ID, try the selected platform ID and use the matched ID in Metrics/GMC_Feed.</div>
+      <div class="hint">When enabled, if GAds.id matches this alternate platform ID, GMC_Feed will use the Google Ads ID for that product.</div>
+      <label>If Google Ads does not match Default Feed ID, try</label>
       <select id="match-gads-mode"></select>
     </div>
   </div>
@@ -157,20 +203,6 @@
       <label>Client Secret</label>
       <input type="password" id="shopify-secret" placeholder="Leave blank to keep existing">
     </div>
-    <div class="section">
-      <label>Product ID Format</label>
-      <div class="hint">Used to match Shopify products with Merchant Center IDs.</div>
-      <select id="shopify-format">
-        <option value="shopify">shopify (Standard)</option>
-        <option value="variant_id">variant_id (Only)</option>
-        <option value="parent_id">parent_id (Only)</option>
-      </select>
-    </div>
-    <div class="section">
-      <label>Shopify Country Code</label>
-      <div class="hint">Used only for standard format: shopify_{COUNTRY}_{productId}_{variantId}</div>
-      <input type="text" id="shopify-country-code" placeholder="e.g. zz, us, de">
-    </div>
   </div>
 
   <!-- Gomag Fields -->
@@ -183,15 +215,6 @@
     <div class="section">
       <label>Apikey</label>
       <input type="password" id="gomag-api-key" placeholder="Leave blank to keep existing">
-    </div>
-    <div class="section">
-      <label>Output Product ID Mode</label>
-      <div class="hint">Used for Metrics/GMC ID matching. Gomag orders are matched internally by Gomag product ID.</div>
-      <select id="gomag-id-mode">
-        <option value="sku">SKU</option>
-        <option value="product_id">Product ID</option>
-        <option value="ean">EAN</option>
-      </select>
     </div>
     <div class="section">
       <label>Catalog Rows</label>
@@ -273,7 +296,12 @@
       document.getElementById('section-shopify').classList.toggle('visible', p === 'shopify');
       document.getElementById('section-gomag').classList.toggle('visible', p === 'gomag');
       document.getElementById('section-ga4').classList.toggle('visible', p === 'ga4');
-      document.getElementById('section-gads-match').classList.toggle('visible', p === 'woocommerce' || p === 'shopify' || p === 'gomag');
+      document.getElementById('section-product-id').classList.toggle('visible', isStorePlatform(p));
+      document.getElementById('default-id-woocommerce').classList.toggle('visible', p === 'woocommerce');
+      document.getElementById('default-id-shopify').classList.toggle('visible', p === 'shopify');
+      document.getElementById('shopify-country-section').classList.toggle('visible', p === 'shopify');
+      document.getElementById('default-id-gomag').classList.toggle('visible', p === 'gomag');
+      setProductIdPreview(p);
       setMatchGAdsModeOptions();
     }
 
@@ -357,6 +385,21 @@
       } else if (options.length > 0) {
         select.value = options[0].value;
       }
+    }
+
+    function isStorePlatform(platform) {
+      return platform === 'woocommerce' || platform === 'shopify' || platform === 'gomag';
+    }
+
+    function setProductIdPreview(platform) {
+      var preview = document.getElementById('product-id-preview');
+      if (!preview) return;
+      var textByPlatform = {
+        woocommerce: 'Default Feed ID: Product ID. Optional Ads match: Product ID or SKU.',
+        shopify: 'Default Feed ID: Shopify standard / Variant ID / Parent ID. Optional Ads match: Standard, Parent, or Variant.',
+        gomag: 'Default Feed ID: SKU / Internal ID / EAN. Optional Ads match: Internal ID or SKU.'
+      };
+      preview.textContent = textByPlatform[platform] || '';
     }
 
     function renderGomagOrderStatuses(statuses, selectedIds) {
