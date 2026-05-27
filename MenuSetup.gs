@@ -258,6 +258,8 @@ function getCurrentSettingsForDialog() {
     shopifySecret: mask('SHOPIFY_CLIENT_SECRET'),
     shopifyFormat: props.getProperty('CFG_SHOPIFY_FORMAT') || DEFAULT_LABEL_CONFIG.Shopify.ProductIdFormat,
     shopifyCountryCode: props.getProperty('CFG_COUNTRY_CODE') || DEFAULT_LABEL_CONFIG.Shopify.CountryCode,
+    matchGAdsIdsEnabled: props.getProperty('CFG_MATCH_GADS_IDS_ENABLED') === 'true',
+    matchGAdsIdsMode: props.getProperty('CFG_MATCH_GADS_IDS_MODE') || DEFAULT_LABEL_CONFIG.MatchGAdsIds.Mode,
     gomagApiShop:  props.getProperty('GOMAG_API_SHOP')      || '',
     gomagApiKey:   mask('GOMAG_API_KEY'),
     gomagIdMode:   props.getProperty('CFG_GOMAG_ID_MODE')   || DEFAULT_LABEL_CONFIG.Gomag.ProductIdMode,
@@ -282,6 +284,10 @@ function saveSettingsFromDialog(payload) {
   if (payload.wooDomain)  props.setProperty('WOOCOMMERCE_DOMAIN',     payload.wooDomain);
   if (payload.wooKey)     props.setProperty('WOOCOMMERCE_API_KEY',    payload.wooKey);
   if (payload.wooSecret)  props.setProperty('WOOCOMMERCE_API_SECRET', payload.wooSecret);
+  if (payload.platform === 'woocommerce') {
+    props.setProperty('CFG_MATCH_GADS_IDS_ENABLED', payload.matchGAdsIdsEnabled ? 'true' : 'false');
+    props.setProperty('CFG_MATCH_GADS_IDS_MODE', payload.matchGAdsIdsMode || 'woo_product_id');
+  }
 
   // Shopify
   if (payload.shopifyDomain)  props.setProperty('SHOPIFY_DOMAIN',        payload.shopifyDomain);
@@ -290,6 +296,8 @@ function saveSettingsFromDialog(payload) {
   if (payload.platform === 'shopify') {
     props.setProperty('CFG_SHOPIFY_FORMAT', payload.shopifyFormat || DEFAULT_LABEL_CONFIG.Shopify.ProductIdFormat);
     props.setProperty('CFG_COUNTRY_CODE', payload.shopifyCountryCode || DEFAULT_LABEL_CONFIG.Shopify.CountryCode);
+    props.setProperty('CFG_MATCH_GADS_IDS_ENABLED', payload.matchGAdsIdsEnabled ? 'true' : 'false');
+    props.setProperty('CFG_MATCH_GADS_IDS_MODE', payload.matchGAdsIdsMode || 'shopify_standard');
   }
 
   // Gomag
@@ -299,6 +307,8 @@ function saveSettingsFromDialog(payload) {
   if (payload.platform === 'gomag') {
     props.setProperty('CFG_GOMAG_PRODUCT_SCOPE', payload.gomagProductScope || DEFAULT_LABEL_CONFIG.Gomag.ProductScope);
     props.setProperty('CFG_GOMAG_SECONDARY_ID_MODE', payload.gomagSecondaryIdMode || '');
+    props.setProperty('CFG_MATCH_GADS_IDS_ENABLED', payload.matchGAdsIdsEnabled ? 'true' : 'false');
+    props.setProperty('CFG_MATCH_GADS_IDS_MODE', payload.matchGAdsIdsMode || 'gomag_internal_id');
     props.setProperty('CFG_GOMAG_ORDER_STATUS_IDS', Array.isArray(payload.gomagOrderStatusIds) ? payload.gomagOrderStatusIds.join(',') : '');
     if (props.getProperty('GOMAG_API_SHOP') && props.getProperty('GOMAG_API_KEY')) {
       try {
@@ -447,7 +457,7 @@ function viewStoreSettings() {
     const domain = props.getProperty('SHOPIFY_DOMAIN') || 'Not configured';
     const id     = props.getProperty('SHOPIFY_CLIENT_ID')     ? '••••' + props.getProperty('SHOPIFY_CLIENT_ID').slice(-4)     : 'Not configured';
     const secret = props.getProperty('SHOPIFY_CLIENT_SECRET') ? '••••' + props.getProperty('SHOPIFY_CLIENT_SECRET').slice(-4) : 'Not configured';
-    message = `🛍️ SHOPIFY\nDomain:     ${domain}\nAPI Key/ID: ${id}\nSecret:     ${secret}`;
+    message = `🛍️ SHOPIFY\nDomain:     ${domain}\nAPI Key/ID: ${id}\nSecret:     ${secret}\nMatch GAds IDs: ${formatMatchGAdsStatus_(props)}`;
   } else if (platform === 'gomag') {
     const apiShop = props.getProperty('GOMAG_API_SHOP') || 'Not configured';
     const key = props.getProperty('GOMAG_API_KEY') ? '••••' + props.getProperty('GOMAG_API_KEY').slice(-4) : 'Not configured';
@@ -455,7 +465,7 @@ function viewStoreSettings() {
     const productScope = props.getProperty('CFG_GOMAG_PRODUCT_SCOPE') || DEFAULT_LABEL_CONFIG.Gomag.ProductScope;
     const secondaryIdMode = props.getProperty('CFG_GOMAG_SECONDARY_ID_MODE') || '';
     const statusIds = parseCommaList_(props.getProperty('CFG_GOMAG_ORDER_STATUS_IDS') || '');
-    message = `GOMAG\nApiShop:    ${apiShop}\nApikey:     ${key}\nID Mode:    ${formatGomagIdModeLabel_(idMode)}\nCatalog rows: ${formatGomagProductScopeLabel_(productScope)}\nGMC_Feed_2 ID: ${formatGomagIdModeLabel_(secondaryIdMode) || 'Disabled'}\nOrder statuses: ${statusIds.length ? statusIds.join(', ') : 'All'}`;
+    message = `GOMAG\nApiShop:    ${apiShop}\nApikey:     ${key}\nID Mode:    ${formatGomagIdModeLabel_(idMode)}\nCatalog rows: ${formatGomagProductScopeLabel_(productScope)}\nGMC_Feed_2 ID: ${formatGomagIdModeLabel_(secondaryIdMode) || 'Disabled'}\nMatch GAds IDs: ${formatMatchGAdsStatus_(props)}\nOrder statuses: ${statusIds.length ? statusIds.join(', ') : 'All'}`;
   } else if (platform === 'ga4') {
     const gaId  = props.getProperty('GA4_PROPERTY_ID') || 'Not configured';
     message = `GOOGLE ANALYTICS 4\nProperty ID: ${gaId}`;
@@ -463,7 +473,7 @@ function viewStoreSettings() {
     const domain = props.getProperty('WOOCOMMERCE_DOMAIN') || 'Not configured';
     const key    = props.getProperty('WOOCOMMERCE_API_KEY')    ? '••••' + props.getProperty('WOOCOMMERCE_API_KEY').slice(-4)    : 'Not configured';
     const secret = props.getProperty('WOOCOMMERCE_API_SECRET') ? '••••' + props.getProperty('WOOCOMMERCE_API_SECRET').slice(-4) : 'Not configured';
-    message = `🛒 WOOCOMMERCE\nDomain:     ${domain}\nAPI Key:    ${key}\nSecret:     ${secret}`;
+    message = `🛒 WOOCOMMERCE\nDomain:     ${domain}\nAPI Key:    ${key}\nSecret:     ${secret}\nMatch GAds IDs: ${formatMatchGAdsStatus_(props)}`;
   } else {
     ui.alert(
       'Platform not configured',
@@ -487,6 +497,24 @@ function formatGomagIdModeLabel_(value) {
 
 function formatGomagProductScopeLabel_(value) {
   return value === 'parents' ? 'Parent products only' : 'Product versions / variants';
+}
+
+function formatMatchGAdsStatus_(props) {
+  if (props.getProperty('CFG_MATCH_GADS_IDS_ENABLED') !== 'true') return 'Disabled';
+  return formatMatchGAdsModeLabel_(props.getProperty('CFG_MATCH_GADS_IDS_MODE') || '') || 'Enabled';
+}
+
+function formatMatchGAdsModeLabel_(value) {
+  const labels = {
+    woo_product_id: 'Product ID',
+    woo_sku: 'SKU',
+    shopify_standard: 'Shopify standard ID',
+    shopify_parent_id: 'Parent ID',
+    shopify_variant_id: 'Variant ID',
+    gomag_internal_id: 'Gomag Internal ID',
+    gomag_sku: 'SKU'
+  };
+  return labels[value] || '';
 }
 
 // ---------------------------------------------------------------------------

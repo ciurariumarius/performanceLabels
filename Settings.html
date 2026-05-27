@@ -53,6 +53,10 @@
       font-weight: 400; margin: 0; color: #202124;
     }
     .checkbox-row input { flex: 0 0 auto; }
+    .inline-check {
+      display: flex; align-items: center; gap: 8px; font-weight: 500;
+      margin-bottom: 6px; color: #3c4043;
+    }
     .empty-state {
       padding: 10px; border: 1px dashed #dadce0; border-radius: 6px;
       color: #5f6368; font-size: 12px; line-height: 1.4; background: #f8f9fa;
@@ -100,6 +104,17 @@
   </div>
 
   <hr class="divider">
+
+  <div id="section-gads-match" class="platform-section">
+    <div class="section">
+      <label class="inline-check">
+        <input type="checkbox" id="match-gads-enabled">
+        <span>Match Google Ads IDs</span>
+      </label>
+      <div class="hint">If Google Ads IDs do not match the main Product ID, try the selected platform ID and use the matched ID in Metrics/GMC_Feed.</div>
+      <select id="match-gads-mode"></select>
+    </div>
+  </div>
 
   <!-- Google Analytics Fields -->
   <div id="section-ga4" class="platform-section">
@@ -228,6 +243,7 @@
         document.getElementById('shopify-secret').value = data.shopifySecret || '';
         document.getElementById('shopify-format').value = data.shopifyFormat || 'shopify';
         document.getElementById('shopify-country-code').value = data.shopifyCountryCode || 'zz';
+        document.getElementById('match-gads-enabled').checked = !!data.matchGAdsIdsEnabled;
         document.getElementById('gomag-api-shop').value = data.gomagApiShop || '';
         document.getElementById('gomag-api-key').value  = data.gomagApiKey  || '';
         document.getElementById('gomag-id-mode').value  = data.gomagIdMode  || 'sku';
@@ -235,6 +251,7 @@
         document.getElementById('gomag-secondary-id-mode').value = data.gomagSecondaryIdMode || '';
         renderGomagOrderStatuses(data.gomagOrderStatuses || [], data.gomagOrderStatusIds || []);
         document.getElementById('ga4-property-id').value = data.ga4PropertyId || '';
+        setMatchGAdsModeOptions(data.matchGAdsIdsMode || '');
       })
       .getCurrentSettingsForDialog();
 
@@ -256,6 +273,8 @@
       document.getElementById('section-shopify').classList.toggle('visible', p === 'shopify');
       document.getElementById('section-gomag').classList.toggle('visible', p === 'gomag');
       document.getElementById('section-ga4').classList.toggle('visible', p === 'ga4');
+      document.getElementById('section-gads-match').classList.toggle('visible', p === 'woocommerce' || p === 'shopify' || p === 'gomag');
+      setMatchGAdsModeOptions();
     }
 
     function saveSettings() {
@@ -282,6 +301,8 @@
         shopifySecret: changed('shopify-secret'),
         shopifyFormat: document.getElementById('shopify-format').value,
         shopifyCountryCode: document.getElementById('shopify-country-code').value.trim(),
+        matchGAdsIdsEnabled: document.getElementById('match-gads-enabled').checked,
+        matchGAdsIdsMode: document.getElementById('match-gads-mode').value,
         gomagApiShop:  document.getElementById('gomag-api-shop').value.trim(),
         gomagApiKey:   changed('gomag-api-key'),
         gomagIdMode:   document.getElementById('gomag-id-mode').value,
@@ -306,6 +327,36 @@
           document.getElementById('error').style.display = 'block';
         })
         .saveSettingsFromDialog(payload);
+    }
+
+    function setMatchGAdsModeOptions(selectedValue) {
+      var select = document.getElementById('match-gads-mode');
+      if (!select) return;
+      var previous = selectedValue !== undefined ? selectedValue : select.value;
+      var optionsByPlatform = {
+        woocommerce: [
+          { value: 'woo_product_id', label: 'Product ID' },
+          { value: 'woo_sku', label: 'SKU' }
+        ],
+        shopify: [
+          { value: 'shopify_standard', label: 'Shopify standard ID' },
+          { value: 'shopify_parent_id', label: 'Parent ID' },
+          { value: 'shopify_variant_id', label: 'Variant ID' }
+        ],
+        gomag: [
+          { value: 'gomag_internal_id', label: 'Gomag Internal ID' },
+          { value: 'gomag_sku', label: 'SKU' }
+        ]
+      };
+      var options = optionsByPlatform[currentPlatform] || [];
+      select.innerHTML = options.map(function(option) {
+        return '<option value="' + escapeHtml(option.value) + '">' + escapeHtml(option.label) + '</option>';
+      }).join('');
+      if (options.some(function(option) { return option.value === previous; })) {
+        select.value = previous;
+      } else if (options.length > 0) {
+        select.value = options[0].value;
+      }
     }
 
     function renderGomagOrderStatuses(statuses, selectedIds) {

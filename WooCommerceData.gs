@@ -160,7 +160,7 @@ function executeFetchProductsPhase_(config, state, productMap, executionStart) {
     const requests = [];
     for (let i = 0; i < PARALLEL_REQUESTS; i++) {
       const pageNum = state.page + i;
-      const url = `${config.shopUrl}/wp-json/wc/v3/products?page=${pageNum}&per_page=${WOO_PAGE_SIZE}&_fields=id,name,price,stock_status,stock_quantity,categories,date_created_gmt`;
+      const url = `${config.shopUrl}/wp-json/wc/v3/products?page=${pageNum}&per_page=${WOO_PAGE_SIZE}&_fields=id,sku,name,price,stock_status,stock_quantity,categories,date_created_gmt`;
       requests.push({ url: url, method: "get", headers: config.authHeader, muteHttpExceptions: true });
     }
 
@@ -183,6 +183,7 @@ function executeFetchProductsPhase_(config, state, productMap, executionStart) {
           if (p.categories && p.categories.length > 0) cat = p.categories[0].name;
           productMap[p.id] = {
             id: p.id, name: p.name, category: cat, price: parseFloatSafe(p.price), // Use CommonUtilities
+            sku: p.sku || "",
             stockStatus: p.stock_status, stockQty: parseIntSafe(p.stock_quantity), // Use CommonUtilities
             dateCreated: p.date_created_gmt,
             rev: 0, sold: 0, orders: 0, rev14: 0
@@ -297,7 +298,7 @@ function executeWriteDataPhase_(config, state, productMap, executionStart, ss) {
     const headers = [
       "Product ID", "Product Name", "Product Category", "Product Price", "Date Created",
       "Total Orders", "Total Items Sold", "Total Revenue", "Revenue last 14 days",
-      "Stock Status", "Stock Quantity"
+      "Stock Status", "Stock Quantity", "SKU"
     ];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold").setHorizontalAlignment("center");
   }
@@ -305,7 +306,7 @@ function executeWriteDataPhase_(config, state, productMap, executionStart, ss) {
   // Convert Map to Array & Sort
   const rows = Object.values(productMap).map(p => [
     p.id, p.name, p.category, p.price, p.dateCreated,
-    p.orders, p.sold, p.rev, p.rev14, p.stockStatus, p.stockQty
+    p.orders, p.sold, p.rev, p.rev14, p.stockStatus, p.stockQty, p.sku
   ]).sort((a,b) => b[7] - a[7]); // Sort by Revenue (Desc)
 
   // Only perform writing if there are rows

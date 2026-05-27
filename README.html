@@ -41,7 +41,7 @@
   <ul>
     <li><b>WooCommerce</b>: store domain, API key, and API secret.</li>
     <li><b>Shopify</b>: domain, client credentials, Product ID Format, and Shopify Country Code.</li>
-    <li><b>Gomag</b>: ApiShop, Apikey, Output Product ID Mode for Merchant/Ads matching, parent-vs-variant catalog rows, optional GMC_Feed_2 ID mode, and optional order statuses to count. Leave statuses unchecked to count all orders.</li>
+    <li><b>Gomag</b>: ApiShop, Apikey, Output Product ID Mode for Merchant/Ads matching, Google Ads ID fallback matching, parent-vs-variant catalog rows, optional GMC_Feed_2 ID mode, and optional order statuses to count. Leave statuses unchecked to count all orders.</li>
     <li><b>GA4</b>: GA4 Property ID only.</li>
   </ul>
 
@@ -70,6 +70,7 @@
     <li><code>Metrics</code>: consolidated source data plus Google Ads metrics.</li>
     <li><code>GMC_Feed</code>: final supplemental feed with product IDs and labels.</li>
     <li><code>GMC_Feed_2</code>: optional secondary feed when prefix/suffix or a Gomag secondary ID mode is configured.</li>
+    <li>Google Ads ID fallback matching can replace final feed IDs with a selected platform ID when that ID matches <code>GAds.id</code>.</li>
     <li>Catalog completeness checks are logged in <code>Overview</code>; no separate audit sheet is required.</li>
   </ul>
 

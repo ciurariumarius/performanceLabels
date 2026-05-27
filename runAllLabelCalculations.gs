@@ -128,11 +128,13 @@ function consolidateMetrics(ss) {
   
   const sourceRows = [...shopifyData, ...wooData, ...gomagData];
   const sourceData = sourceRows.filter(item => item.id);
-  const aggregatedSourceData = aggregateSourceRowsById_(sourceData);
+  const remapResult = remapSourceRowsToGAdsIds_(ss, sourceData, gadsIds);
+  const matchedSourceData = remapResult.rows;
+  const aggregatedSourceData = aggregateSourceRowsById_(matchedSourceData);
   const skippedRows = sourceRows.length - sourceData.length;
-  const duplicateRows = sourceData.length - aggregatedSourceData.length;
-  Logger.log(`Source rows loaded: Shopify=${shopifyData.length}, WooCommerce=${wooData.length}, Gomag=${gomagData.length}. Usable IDs=${sourceData.length}, unique IDs=${aggregatedSourceData.length}, duplicate IDs merged=${duplicateRows}, skipped blank IDs=${skippedRows}.`);
-  logCatalogAuditToOverview_(ss, { shopifyData, wooData, gomagData, sourceRows, sourceData, aggregatedSourceData });
+  const duplicateRows = matchedSourceData.length - aggregatedSourceData.length;
+  Logger.log(`Source rows loaded: Shopify=${shopifyData.length}, WooCommerce=${wooData.length}, Gomag=${gomagData.length}. Usable IDs=${sourceData.length}, unique IDs=${aggregatedSourceData.length}, fallback ID matches=${remapResult.fallbackMatches}, duplicate IDs merged=${duplicateRows}, skipped blank IDs=${skippedRows}.`);
+  logCatalogAuditToOverview_(ss, { shopifyData, wooData, gomagData, sourceRows, sourceData: matchedSourceData, aggregatedSourceData });
   logGAdsIdMatchAuditToOverview_(ss, aggregatedSourceData, gadsIds);
   
   const combinedData = aggregatedSourceData.map(item => {
@@ -224,6 +226,11 @@ function syncSecondaryFeed_(ss) {
 function getShopifyData_(sheet) {
   return readStoreSourceRows_(sheet, 'Shopify', {
     id: 'Product ID',
+    alternateIds: {
+      shopify_standard: 'Shopify Standard ID',
+      shopify_parent_id: 'Parent ID',
+      shopify_variant_id: 'Variant ID'
+    },
     title: ['Product Name', 'Variant Title'],
     dateCreated: 'Date Created',
     price: 'Product Price',
@@ -238,6 +245,10 @@ function getShopifyData_(sheet) {
 function getWooData_(sheet) {
   return readStoreSourceRows_(sheet, 'WooCommerce', {
     id: 'Product ID',
+    alternateIds: {
+      woo_product_id: 'Product ID',
+      woo_sku: 'SKU'
+    },
     title: 'Product Name',
     dateCreated: 'Date Created',
     price: 'Product Price',
@@ -253,6 +264,10 @@ function getGomagData_(sheet) {
   return readStoreSourceRows_(sheet, 'Gomag', {
     id: 'Product ID',
     secondaryId: 'Secondary Product ID',
+    alternateIds: {
+      gomag_internal_id: 'Gomag Internal ID',
+      gomag_sku: 'SKU'
+    },
     title: 'Product Name',
     dateCreated: 'Date Created',
     price: 'Product Price',
@@ -331,7 +346,7 @@ function readStoreSourceRows_(sheet, sourceName, mapping) {
     if (header) headerMap[header] = index;
   });
 
-  const optionalHeaders = ['secondaryId'];
+  const optionalHeaders = ['secondaryId', 'alternateIds'];
   const requiredHeaders = [];
   Object.keys(mapping).forEach(key => {
     if (optionalHeaders.indexOf(key) !== -1) return;
@@ -345,6 +360,9 @@ function readStoreSourceRows_(sheet, sourceName, mapping) {
     throw new Error(`${sourceName} sheet is missing required column(s): ${missing.join(", ")}`);
   }
 
+  const alternateMappings = mapping.alternateIds || {};
+  const availableAlternateKeys = Object.keys(alternateMappings).filter(key => headerMap[alternateMappings[key]] !== undefined);
+
   const rawData = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
   const get = (row, header) => row[headerMap[header]];
 
@@ -357,6 +375,7 @@ function readStoreSourceRows_(sheet, sourceName, mapping) {
       source: sourceName,
       id: get(row, mapping.id),
       secondaryId: mapping.secondaryId && headerMap[mapping.secondaryId] !== undefined ? get(row, mapping.secondaryId) : "",
+      alternateIds: buildAlternateIds_(row, headerMap, alternateMappings, availableAlternateKeys),
       title: title,
       dateCreated: get(row, mapping.dateCreated),
       price: get(row, mapping.price),
@@ -367,6 +386,91 @@ function readStoreSourceRows_(sheet, sourceName, mapping) {
       stockQty: get(row, mapping.stockQty)
     };
   });
+}
+
+function buildAlternateIds_(row, headerMap, alternateMappings, keys) {
+  const alternates = {};
+  (keys || []).forEach(key => {
+    alternates[key] = row[headerMap[alternateMappings[key]]];
+  });
+  return alternates;
+}
+
+function remapSourceRowsToGAdsIds_(ss, sourceData, gadsIds) {
+  const config = getAppConfig();
+  const gadsSet = {};
+  (gadsIds || []).forEach(id => {
+    if (id) gadsSet[id] = true;
+  });
+
+  const result = {
+    rows: [],
+    mainMatches: 0,
+    fallbackMatches: 0,
+    unmatched: 0,
+    samples: []
+  };
+
+  if (!gadsIds || gadsIds.length === 0) {
+    result.rows = sourceData || [];
+    return result;
+  }
+
+  (sourceData || []).forEach(item => {
+    const row = Object.assign({}, item);
+    const mainId = normalizeAuditId_(row.id);
+
+    if (mainId && gadsSet[mainId]) {
+      result.mainMatches++;
+      result.rows.push(row);
+      return;
+    }
+
+    const fallbackId = config.MatchGAdsIds.Enabled
+      ? normalizeAuditId_(row.alternateIds && row.alternateIds[config.MatchGAdsIds.Mode])
+      : "";
+
+    if (fallbackId && gadsSet[fallbackId]) {
+      row.originalId = row.id;
+      row.id = row.alternateIds[config.MatchGAdsIds.Mode];
+      result.fallbackMatches++;
+      result.rows.push(row);
+      return;
+    }
+
+    result.unmatched++;
+    if (result.samples.length < 10 && row.id) result.samples.push(String(row.id));
+    result.rows.push(row);
+  });
+
+  logGAdsFallbackMatchOverview_(ss, result, config);
+  return result;
+}
+
+function logGAdsFallbackMatchOverview_(ss, result, config) {
+  if (!config.MatchGAdsIds.Enabled) return;
+
+  const modeLabel = getMatchGAdsModeLabel_(config.MatchGAdsIds.Mode) || config.MatchGAdsIds.Mode || "fallback";
+  const sampleText = result.samples.length ? ` Unmatched samples: ${result.samples.join(", ")}` : "";
+  const details = `Mode: ${modeLabel}. Main matches: ${result.mainMatches}. Fallback matches: ${result.fallbackMatches}. Still unmatched: ${result.unmatched}.${sampleText}`;
+  const status = result.fallbackMatches > 0 || result.unmatched === 0 ? "SUCCESS" : "WARNING";
+
+  try {
+    appendToOverviewLog(ss, "Overview", "GAds ID Match Fallback", status, details, "-");
+  } catch(e) {}
+}
+
+function getMatchGAdsModeLabel_(value) {
+  const labels = {
+    woo_product_id: 'Product ID',
+    woo_sku: 'SKU',
+    shopify_standard: 'Shopify standard ID',
+    shopify_parent_id: 'Parent ID',
+    shopify_variant_id: 'Variant ID',
+    gomag_internal_id: 'Gomag Internal ID',
+    gomag_sku: 'SKU'
+  };
+  return labels[value] || '';
 }
 
 function aggregateSourceRowsById_(rows) {
@@ -399,6 +503,7 @@ function mergeSourceRowMetrics_(target, source) {
   if (!target.dateCreated && source.dateCreated) target.dateCreated = source.dateCreated;
   if (!parseFloatSafe(target.price, 0) && parseFloatSafe(source.price, 0)) target.price = source.price;
   if (!target.secondaryId && source.secondaryId) target.secondaryId = source.secondaryId;
+  if (!target.originalId && source.originalId) target.originalId = source.originalId;
 
   if (String(source.stockStatus || "").toLowerCase() === "instock") {
     target.stockStatus = source.stockStatus;

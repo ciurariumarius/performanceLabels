@@ -184,6 +184,7 @@ function executeShopifyFetchProductsPhase_(config, state, productMap, executionS
 
             productMap[variant.id] = {
               formattedId: formattedProductId,
+              standardId: `shopify_${config.countryCode}_${product.id}_${variant.id}`,
               variantId: variant.id,
               productId: product.id,
               productName: product.title,
@@ -296,17 +297,17 @@ function executeShopifyWriteDataPhase_(config, state, productMap, executionStart
   if (state.writeStartIndex === 0) {
     sheet.clear();
     const headers = [
-      "Product ID", "Parent ID", "Variant ID", "Product Name", "Variant Title", "Product Price", "Date Created",
+      "Product ID", "Shopify Standard ID", "Parent ID", "Variant ID", "Product Name", "Variant Title", "Product Price", "Date Created",
       "Total Orders", "Total Items Sold", "Total Revenue", "Revenue last 14 days", "Stock Status", "Stock Quantity"
     ];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold").setHorizontalAlignment("center");
   }
 
   const rows = Object.values(productMap).map(p => [
-    p.formattedId, p.productId, p.variantId, p.productName, p.variantTitle, p.price, p.dateCreated,
+    p.formattedId, p.standardId, p.productId, p.variantId, p.productName, p.variantTitle, p.price, p.dateCreated,
     p.uniqueOrders, p.sold, p.rev, p.rev14,
     p.stockStatus, p.stockQuantity
-  ]).sort((a,b) => b[9] - a[9]); // Sort by Rev
+  ]).sort((a,b) => b[10] - a[10]); // Sort by Rev
 
   if (rows.length > 0) {
       const CHUNK_SIZE = 2000;
@@ -320,15 +321,15 @@ function executeShopifyWriteDataPhase_(config, state, productMap, executionStart
           break;
         }
         const chunk = rows.slice(i, i + CHUNK_SIZE);
-        sheet.getRange(2 + i, 1, chunk.length, 13).setValues(chunk);
+        sheet.getRange(2 + i, 1, chunk.length, 14).setValues(chunk);
         SpreadsheetApp.flush();
         logShopifyStatus_("WRITING", `Writing rows ${i} - ${i+chunk.length}...`);
       }
 
       if (doneWriting) {
          // Formatting
-         sheet.getRange(2, 6, rows.length, 1).setNumberFormat('#,##0.00'); // Price
-         sheet.getRange(2, 10, rows.length, 2).setNumberFormat('#,##0.00'); // Revenues
+         sheet.getRange(2, 7, rows.length, 1).setNumberFormat('#,##0.00'); // Price
+         sheet.getRange(2, 11, rows.length, 2).setNumberFormat('#,##0.00'); // Revenues
       }
 
       if (!doneWriting) {

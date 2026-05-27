@@ -19,6 +19,10 @@ const DEFAULT_LABEL_CONFIG = {
     ProductIdFormat: 'shopify',
     CountryCode: 'zz'
   },
+  MatchGAdsIds: {
+    Enabled: false,
+    Mode: ''
+  },
   Gomag: {
     ProductIdMode: 'sku',
     ProductScope: 'variants',
@@ -63,6 +67,10 @@ function getAppConfig() {
     NewProductDays: parseIntSafe(getProp('CFG_NEW_PRODUCT_DAYS', DEFAULT_LABEL_CONFIG.NewProductDays), DEFAULT_LABEL_CONFIG.NewProductDays),
     IdPrefix: getProp('CFG_ID_PREFIX', DEFAULT_LABEL_CONFIG.IdPrefix),
     IdSuffix: getProp('CFG_ID_SUFFIX', DEFAULT_LABEL_CONFIG.IdSuffix),
+    MatchGAdsIds: {
+      Enabled: String(getProp('CFG_MATCH_GADS_IDS_ENABLED', DEFAULT_LABEL_CONFIG.MatchGAdsIds.Enabled)).toLowerCase() === 'true',
+      Mode: getProp('CFG_MATCH_GADS_IDS_MODE', DEFAULT_LABEL_CONFIG.MatchGAdsIds.Mode)
+    },
     Shopify: {
       ProductIdFormat: getProp('CFG_SHOPIFY_FORMAT', DEFAULT_LABEL_CONFIG.Shopify.ProductIdFormat),
       CountryCode: getProp('CFG_COUNTRY_CODE', DEFAULT_LABEL_CONFIG.Shopify.CountryCode)
