@@ -44,6 +44,19 @@
     .btn-primary:hover { background: #1765cc; }
     .btn-secondary { background: #fff; color: #1a73e8; border: 1px solid #dadce0; }
     .btn-secondary:hover { background: #f1f3f4; }
+    .checkbox-list {
+      max-height: 170px; overflow-y: auto; padding: 8px 10px;
+      border: 1px solid #dadce0; border-radius: 6px; background: #fff;
+    }
+    .checkbox-row {
+      display: flex; align-items: center; gap: 8px; padding: 5px 0;
+      font-weight: 400; margin: 0; color: #202124;
+    }
+    .checkbox-row input { flex: 0 0 auto; }
+    .empty-state {
+      padding: 10px; border: 1px dashed #dadce0; border-radius: 6px;
+      color: #5f6368; font-size: 12px; line-height: 1.4; background: #f8f9fa;
+    }
     #status { margin-top: 10px; font-size: 12px; color: #188038; display: none; }
     #error  { margin-top: 10px; font-size: 12px; color: #c5221f; display: none; }
   </style>
@@ -165,6 +178,31 @@
         <option value="ean">EAN</option>
       </select>
     </div>
+    <div class="section">
+      <label>Catalog Rows</label>
+      <div class="hint">Use versions/variants when Merchant Center has variant-level item IDs. Use parent products only when Ads/Merchant IDs are parent-level.</div>
+      <select id="gomag-product-scope">
+        <option value="variants">Product versions / variants</option>
+        <option value="parents">Parent products only</option>
+      </select>
+    </div>
+    <div class="section">
+      <label>GMC_Feed_2 ID Mode</label>
+      <div class="hint">Creates a secondary feed using a different Gomag identifier. Leave disabled if you only need the main feed.</div>
+      <select id="gomag-secondary-id-mode">
+        <option value="">Disabled</option>
+        <option value="sku">SKU</option>
+        <option value="product_id">Gomag Internal ID</option>
+        <option value="ean">EAN</option>
+      </select>
+    </div>
+    <div class="section">
+      <label>Order Statuses to Count</label>
+      <div class="hint">Leave all unchecked to count all Gomag orders. Select statuses if you only want successful orders in product revenue/order counts.</div>
+      <div id="gomag-order-statuses" class="checkbox-list">
+        <div class="empty-state">No Gomag statuses discovered yet. Save credentials and run Gomag sync once.</div>
+      </div>
+    </div>
   </div>
 
   <div id="status">✅ Settings saved!</div>
@@ -193,6 +231,9 @@
         document.getElementById('gomag-api-shop').value = data.gomagApiShop || '';
         document.getElementById('gomag-api-key').value  = data.gomagApiKey  || '';
         document.getElementById('gomag-id-mode').value  = data.gomagIdMode  || 'sku';
+        document.getElementById('gomag-product-scope').value = data.gomagProductScope || 'variants';
+        document.getElementById('gomag-secondary-id-mode').value = data.gomagSecondaryIdMode || '';
+        renderGomagOrderStatuses(data.gomagOrderStatuses || [], data.gomagOrderStatusIds || []);
         document.getElementById('ga4-property-id').value = data.ga4PropertyId || '';
       })
       .getCurrentSettingsForDialog();
@@ -244,6 +285,9 @@
         gomagApiShop:  document.getElementById('gomag-api-shop').value.trim(),
         gomagApiKey:   changed('gomag-api-key'),
         gomagIdMode:   document.getElementById('gomag-id-mode').value,
+        gomagProductScope: document.getElementById('gomag-product-scope').value,
+        gomagSecondaryIdMode: document.getElementById('gomag-secondary-id-mode').value,
+        gomagOrderStatusIds: getSelectedGomagOrderStatusIds(),
         ga4PropertyId: document.getElementById('ga4-property-id').value.trim()
       };
 
@@ -262,6 +306,45 @@
           document.getElementById('error').style.display = 'block';
         })
         .saveSettingsFromDialog(payload);
+    }
+
+    function renderGomagOrderStatuses(statuses, selectedIds) {
+      var container = document.getElementById('gomag-order-statuses');
+      var selected = {};
+      (selectedIds || []).forEach(function(id) {
+        selected[String(id)] = true;
+      });
+
+      if (!statuses || statuses.length === 0) {
+        container.innerHTML = '<div class="empty-state">No Gomag statuses discovered yet. Save credentials and run Gomag sync once.</div>';
+        return;
+      }
+
+      container.innerHTML = statuses.map(function(status) {
+        var id = String(status.id || '').trim();
+        if (!id) return '';
+        var name = String(status.name || status.label || status.title || id).trim();
+        var checked = selected[id] ? ' checked' : '';
+        return '<label class="checkbox-row">' +
+          '<input type="checkbox" class="gomag-status-checkbox" value="' + escapeHtml(id) + '"' + checked + '>' +
+          '<span>' + escapeHtml(name) + ' <span class="hint">#' + escapeHtml(id) + '</span></span>' +
+          '</label>';
+      }).join('');
+    }
+
+    function getSelectedGomagOrderStatusIds() {
+      return Array.prototype.slice.call(document.querySelectorAll('.gomag-status-checkbox:checked'))
+        .map(function(input) { return input.value; })
+        .filter(Boolean);
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
   </script>
 </body>

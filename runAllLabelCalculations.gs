@@ -175,20 +175,24 @@ function consolidateMetrics(ss) {
     metricsSheet.getRange(2, 12, combinedData.length, 1).setNumberFormat("#,##0.00"); 
     metricsSheet.getRange(2, 14, combinedData.length, 1).setNumberFormat("#,##0.00"); 
     
-    // --- Initialize GMC_Feed_2 (secondary: ID-modified, only created if prefix/suffix is configured) ---
+    // --- Initialize GMC_Feed_2 (secondary: ID-modified, only created if configured) ---
     // Note: Initialization of the primary feed is skipped here since we do it as one batch write later.
     const config = getAppConfig();
     const prefix = config.IdPrefix || "";
     const suffix = config.IdSuffix || "";
-    if (prefix || suffix) {
+    const hasSecondaryIds = sourceData.some(item => item.secondaryId);
+    if (prefix || suffix || hasSecondaryIds) {
       const labelsSheet2 = getOrCreateSheet(ss, LABELS_SHEET_2_NAME);
       labelsSheet2.clear();
       labelsSheet2.getRange(1, 1, 1, 1).setValues([["id"]]).setFontWeight("bold");
-      const idColumnData2 = combinedData.map(row => [prefix + String(row[0]) + suffix]);
+      const idColumnData2 = sourceData.map(item => {
+        const baseId = item.secondaryId || item.id;
+        return [prefix + String(baseId) + suffix];
+      });
       writeValuesToSheetSafe(labelsSheet2, 2, 1, idColumnData2);
-      Logger.log(`GMC_Feed_2 generated with prefix="${prefix}" suffix="${suffix}"`);
+      Logger.log(`GMC_Feed_2 generated with prefix="${prefix}" suffix="${suffix}" secondaryIds=${hasSecondaryIds}`);
     } else {
-      Logger.log("GMC_Feed_2 skipped: ID_PREFIX and ID_SUFFIX are both empty in Config.gs.");
+      Logger.log("GMC_Feed_2 skipped: no prefix, suffix, or secondary ID mode configured.");
     }
   }
 }
@@ -250,6 +254,7 @@ function getWooData_(sheet) {
 function getGomagData_(sheet) {
   return readStoreSourceRows_(sheet, 'Gomag', {
     id: 'Product ID',
+    secondaryId: 'Secondary Product ID',
     title: 'Product Name',
     dateCreated: 'Date Created',
     price: 'Product Price',
@@ -305,8 +310,10 @@ function readStoreSourceRows_(sheet, sourceName, mapping) {
     if (header) headerMap[header] = index;
   });
 
+  const optionalHeaders = ['secondaryId'];
   const requiredHeaders = [];
   Object.keys(mapping).forEach(key => {
+    if (optionalHeaders.indexOf(key) !== -1) return;
     const value = mapping[key];
     if (Array.isArray(value)) requiredHeaders.push(...value);
     else requiredHeaders.push(value);
@@ -328,6 +335,7 @@ function readStoreSourceRows_(sheet, sourceName, mapping) {
     return {
       source: sourceName,
       id: get(row, mapping.id),
+      secondaryId: mapping.secondaryId && headerMap[mapping.secondaryId] !== undefined ? get(row, mapping.secondaryId) : "",
       title: title,
       dateCreated: get(row, mapping.dateCreated),
       price: get(row, mapping.price),

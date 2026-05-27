@@ -44,6 +44,9 @@ CHANGELOG
 - ShopifyData.gs: Limited Shopify order revenue import to paid orders and subtracts line-item discounts when calculating revenue.
 - getWooCommerceCustomers.gs / CommonUtilities.gs: Restored support for reading two-column Config sheets while still preferring Script Properties credentials.
 - Label export: Blank label output mappings now truly disable the output column instead of creating blank-header columns.
+- Settings.html / MenuSetup.gs / GomagData.gs: Added Gomag order status discovery and multi-select filtering so Gomag revenue/order counts can include only selected custom statuses.
+- GomagData.gs: Clarified Gomag Overview logs by separating parent product records fetched from output rows/variants.
+- Settings.html / MenuSetup.gs / GomagData.gs / runAllLabelCalculations.gs: Added Gomag settings for parent-only catalog rows and a secondary feed ID mode using SKU, Gomag internal ID, or EAN.
 
 2026-03-31
 ----------

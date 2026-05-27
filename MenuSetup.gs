@@ -29,7 +29,9 @@ function onOpen() {
       .addSeparator()
       .addItem('Label Settings', 'showLabelSettingsDialog')
       .addItem('Platform Settings', 'showSettingsDialog')
-      .addItem('Auto-Fetch Setup', 'setupActivePlatformAutoFetch');
+      .addItem('Auto-Fetch Setup', 'setupActivePlatformAutoFetch')
+      .addSeparator()
+      .addItem('Changelog', 'showChangelog');
 
   ui.createMenu('Performance Labels')
       .addItem('Setup Script', 'showSetupGuide')
@@ -236,6 +238,7 @@ function showSettingsDialog() {
  */
 function getCurrentSettingsForDialog() {
   const props = PropertiesService.getScriptProperties();
+  const gomagOrderStatuses = parseJsonProperty_(props, 'GOMAG_ORDER_STATUSES', []);
 
   // Helper: mask a stored value, showing only last 4 chars
   function mask(key) {
@@ -256,6 +259,10 @@ function getCurrentSettingsForDialog() {
     gomagApiShop:  props.getProperty('GOMAG_API_SHOP')      || '',
     gomagApiKey:   mask('GOMAG_API_KEY'),
     gomagIdMode:   props.getProperty('CFG_GOMAG_ID_MODE')   || DEFAULT_LABEL_CONFIG.Gomag.ProductIdMode,
+    gomagProductScope: props.getProperty('CFG_GOMAG_PRODUCT_SCOPE') || DEFAULT_LABEL_CONFIG.Gomag.ProductScope,
+    gomagSecondaryIdMode: props.getProperty('CFG_GOMAG_SECONDARY_ID_MODE') || DEFAULT_LABEL_CONFIG.Gomag.SecondaryFeedIdMode,
+    gomagOrderStatuses: gomagOrderStatuses,
+    gomagOrderStatusIds: parseCommaList_(props.getProperty('CFG_GOMAG_ORDER_STATUS_IDS') || ''),
     ga4PropertyId: props.getProperty('GA4_PROPERTY_ID')     || ''
   };
 }
@@ -287,6 +294,18 @@ function saveSettingsFromDialog(payload) {
   if (payload.gomagApiShop) props.setProperty('GOMAG_API_SHOP', payload.gomagApiShop);
   if (payload.gomagApiKey)  props.setProperty('GOMAG_API_KEY',  payload.gomagApiKey);
   props.setProperty('CFG_GOMAG_ID_MODE', payload.gomagIdMode || DEFAULT_LABEL_CONFIG.Gomag.ProductIdMode);
+  if (payload.platform === 'gomag') {
+    props.setProperty('CFG_GOMAG_PRODUCT_SCOPE', payload.gomagProductScope || DEFAULT_LABEL_CONFIG.Gomag.ProductScope);
+    props.setProperty('CFG_GOMAG_SECONDARY_ID_MODE', payload.gomagSecondaryIdMode || '');
+    props.setProperty('CFG_GOMAG_ORDER_STATUS_IDS', Array.isArray(payload.gomagOrderStatusIds) ? payload.gomagOrderStatusIds.join(',') : '');
+    if (props.getProperty('GOMAG_API_SHOP') && props.getProperty('GOMAG_API_KEY')) {
+      try {
+        refreshGomagOrderStatuses_(loadGomagConfig_());
+      } catch (e) {
+        console.warn("Could not refresh Gomag order statuses during settings save: " + e.message);
+      }
+    }
+  }
 
   // Google Analytics
   if (payload.ga4PropertyId) {
@@ -297,6 +316,22 @@ function saveSettingsFromDialog(payload) {
     // If we want them to clear it, we could use setProperty('GA4_PROPERTY_ID', '') instead.
     props.setProperty('GA4_PROPERTY_ID', payload.ga4PropertyId || '');
   }
+}
+
+function parseJsonProperty_(props, key, fallback) {
+  try {
+    const value = props.getProperty(key);
+    return value ? JSON.parse(value) : fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+
+function parseCommaList_(value) {
+  return String(value || '')
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean);
 }
 
 // ---------------------------------------------------------------------------
@@ -415,7 +450,10 @@ function viewStoreSettings() {
     const apiShop = props.getProperty('GOMAG_API_SHOP') || 'Not configured';
     const key = props.getProperty('GOMAG_API_KEY') ? '••••' + props.getProperty('GOMAG_API_KEY').slice(-4) : 'Not configured';
     const idMode = props.getProperty('CFG_GOMAG_ID_MODE') || DEFAULT_LABEL_CONFIG.Gomag.ProductIdMode;
-    message = `GOMAG\nApiShop:    ${apiShop}\nApikey:     ${key}\nID Mode:    ${idMode}`;
+    const productScope = props.getProperty('CFG_GOMAG_PRODUCT_SCOPE') || DEFAULT_LABEL_CONFIG.Gomag.ProductScope;
+    const secondaryIdMode = props.getProperty('CFG_GOMAG_SECONDARY_ID_MODE') || 'Disabled';
+    const statusIds = parseCommaList_(props.getProperty('CFG_GOMAG_ORDER_STATUS_IDS') || '');
+    message = `GOMAG\nApiShop:    ${apiShop}\nApikey:     ${key}\nID Mode:    ${idMode}\nCatalog rows: ${productScope}\nGMC_Feed_2 ID: ${secondaryIdMode}\nOrder statuses: ${statusIds.length ? statusIds.join(', ') : 'All'}`;
   } else if (platform === 'ga4') {
     const gaId  = props.getProperty('GA4_PROPERTY_ID') || 'Not configured';
     message = `GOOGLE ANALYTICS 4\nProperty ID: ${gaId}`;
@@ -445,6 +483,13 @@ function showDocumentation() {
       .setWidth(480)
       .setHeight(520);
   SpreadsheetApp.getUi().showModalDialog(html, '📖 Performance Labels — Documentation');
+}
+
+function showChangelog() {
+  const html = HtmlService.createHtmlOutputFromFile('changes')
+      .setWidth(560)
+      .setHeight(620);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Performance Labels — Changelog');
 }
 
 // ---------------------------------------------------------------------------

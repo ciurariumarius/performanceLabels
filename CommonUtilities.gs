@@ -20,7 +20,9 @@ const DEFAULT_LABEL_CONFIG = {
     CountryCode: 'zz'
   },
   Gomag: {
-    ProductIdMode: 'sku'
+    ProductIdMode: 'sku',
+    ProductScope: 'variants',
+    SecondaryFeedIdMode: ''
   },
   ROAS: { Good: 5, Bad: 3 },
   ConversionRate: { Good: 4, Bad: 0.5 },
@@ -66,7 +68,9 @@ function getAppConfig() {
       CountryCode: getProp('CFG_COUNTRY_CODE', DEFAULT_LABEL_CONFIG.Shopify.CountryCode)
     },
     Gomag: {
-      ProductIdMode: getProp('CFG_GOMAG_ID_MODE', DEFAULT_LABEL_CONFIG.Gomag.ProductIdMode)
+      ProductIdMode: getProp('CFG_GOMAG_ID_MODE', DEFAULT_LABEL_CONFIG.Gomag.ProductIdMode),
+      ProductScope: getProp('CFG_GOMAG_PRODUCT_SCOPE', DEFAULT_LABEL_CONFIG.Gomag.ProductScope),
+      SecondaryFeedIdMode: getProp('CFG_GOMAG_SECONDARY_ID_MODE', DEFAULT_LABEL_CONFIG.Gomag.SecondaryFeedIdMode)
     },
     ROAS: {
       Good: parseFloatSafe(getProp('CFG_ROAS_GOOD', DEFAULT_LABEL_CONFIG.ROAS.Good), 5),
