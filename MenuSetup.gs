@@ -36,9 +36,11 @@ function onOpen() {
   ui.createMenu('Performance Labels')
       .addItem('Setup Script', 'showSetupGuide')
       .addItem('Google Ads Script [To Copy]', 'showAdsScriptModal')
-      .addItem('Documentation', 'showDocumentation')
       .addSeparator()
       .addSubMenu(settingsMenu)
+      .addSeparator()
+      .addItem('Labels Documentation', 'showLabelsDocumentation')
+      .addItem('Script Documentation', 'showDocumentation')
       .addToUi();
 }
 
@@ -495,7 +497,14 @@ function showDocumentation() {
   const html = HtmlService.createHtmlOutputFromFile('README')
       .setWidth(480)
       .setHeight(520);
-  SpreadsheetApp.getUi().showModalDialog(html, '📖 Performance Labels — Documentation');
+  SpreadsheetApp.getUi().showModalDialog(html, 'Performance Labels — Script Documentation');
+}
+
+function showLabelsDocumentation() {
+  const html = HtmlService.createHtmlOutputFromFile('LabelsDocumentation')
+      .setWidth(560)
+      .setHeight(620);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Performance Labels — Labels Documentation');
 }
 
 function showChangelog() {

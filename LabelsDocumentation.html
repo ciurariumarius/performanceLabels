@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      color: #202124;
+      padding: 18px;
+      line-height: 1.45;
+      background: #fff;
+    }
+    h1 {
+      font-size: 20px;
+      margin: 0 0 12px;
+      color: #1a73e8;
+    }
+    h2 {
+      font-size: 15px;
+      margin: 18px 0 8px;
+      color: #3c4043;
+    }
+    p, li {
+      font-size: 13px;
+    }
+    code {
+      background: #f1f3f4;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 10px 0 16px;
+      font-size: 12px;
+    }
+    th, td {
+      border: 1px solid #dadce0;
+      padding: 7px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #f8f9fa;
+      font-weight: 600;
+    }
+    .note {
+      background: #e8f0fe;
+      border-left: 4px solid #1a73e8;
+      padding: 10px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Labels Documentation</h1>
+  <p class="note">Labels are generated from <code>Metrics</code> and written to <code>GMC_Feed</code>. Output columns are controlled from <b>Settings &gt; Label Settings</b>.</p>
+
+  <h2>Main Labels</h2>
+  <table>
+    <tr><th>Label</th><th>Meaning</th><th>Default Output</th></tr>
+    <tr><td>Revenue Simple</td><td><code>has_revenue</code> or <code>no_revenue</code> based on store revenue in the selected timeframe.</td><td><code>custom_label_0</code></td></tr>
+    <tr><td>Price Interval</td><td>Groups products into price buckets using the configured price step.</td><td><code>custom_label_1</code></td></tr>
+    <tr><td>GAds ROAS</td><td>Labels Ads ROAS using Good ROAS and Bad ROAS thresholds.</td><td><code>custom_label_2</code></td></tr>
+    <tr><td>GAds CVR</td><td>Labels conversion rate using Good CVR and Bad CVR thresholds.</td><td><code>custom_label_3</code></td></tr>
+    <tr><td>GAds Clicks</td><td>Labels click volume using High Clicks and Low Clicks thresholds.</td><td><code>custom_label_4</code></td></tr>
+  </table>
+
+  <h2>Optional Labels</h2>
+  <table>
+    <tr><th>Label</th><th>Meaning</th></tr>
+    <tr><td>Revenue Advanced</td><td>Compares each product revenue against account average revenue.</td></tr>
+    <tr><td>Orders</td><td>Classifies products by order count using the High Orders threshold.</td></tr>
+    <tr><td>Available Variants</td><td>Groups related variants when the source platform provides variant-level rows.</td></tr>
+    <tr><td>Trend</td><td>Compares recent 14-day revenue against the older part of the selected timeframe.</td></tr>
+    <tr><td>New Product</td><td>Marks products newer than the configured New Product Days window.</td></tr>
+    <tr><td>Performance Index</td><td>Combines store revenue, Ads cost, ROAS, orders, and price into a performance classification.</td></tr>
+  </table>
+
+  <h2>Important Notes</h2>
+  <ul>
+    <li>Leave an output mapping blank to disable that label column.</li>
+    <li>Google Ads labels require matching IDs between <code>GAds.id</code> and the platform <code>Product ID</code>.</li>
+    <li>Duplicate platform IDs are merged before labels are calculated, so each feed ID should have one final row.</li>
+    <li><code>GMC_Feed_2</code> uses the same labels as <code>GMC_Feed</code>, but can use alternate IDs when configured.</li>
+  </ul>
+</body>
+</html>

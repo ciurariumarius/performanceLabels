@@ -485,7 +485,7 @@ function logSingleGAdsIdMatchAudit_(ss, component, gadsIds, platformIdSet) {
   const percent = total > 0 ? ((matched / total) * 100).toFixed(1) + "%" : "100%";
   const status = unmatched.length === 0 ? "SUCCESS" : "WARNING";
   const samples = unmatched.slice(0, 10);
-  const sampleText = samples.length ? ` Samples: ${samples.join(", ")}` : "";
+  const sampleText = samples.length ? ` Unmatched samples: ${samples.join(", ")}` : "";
   const details = `GAds IDs: ${total}. Matched: ${matched}. Unmatched: ${unmatched.length}. Match rate: ${percent}.${sampleText}`;
 
   try {
