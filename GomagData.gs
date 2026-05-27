@@ -159,9 +159,10 @@ function executeGomagFetchProductsPhase_(config, state, productMap, executionSta
       addGomagProductToMap_(productMap, product, config);
     });
 
-    logGomagStatus_("RUNNING", `Fetched Gomag products page ${state.page}: ${products.length} items.`);
+    const pagination = getGomagPagination_(response);
+    logGomagStatus_("RUNNING", `Fetched Gomag products page ${state.page}: ${products.length} items${formatGomagPagination_(pagination)}.`);
 
-    if (isGomagLastPage_(response, state.page, products.length)) {
+    if (isGomagLastPage_(pagination, state.page, products.length)) {
       state.phase = 'FETCH_ORDERS';
       state.page = 1;
       return;
@@ -188,7 +189,8 @@ function executeGomagFetchOrdersPhase_(config, state, productMap, executionStart
 
     const completedPage = processGomagOrdersPage_(orders, productMap, state, config, day14, executionStart);
 
-    logGomagStatus_("RUNNING", `Fetched Gomag orders page ${state.page}: ${orders.length} orders.`);
+    const pagination = getGomagPagination_(response);
+    logGomagStatus_("RUNNING", `Fetched Gomag orders page ${state.page}: ${orders.length} orders${formatGomagPagination_(pagination)}.`);
 
     if (!completedPage) {
       logGomagStatus_("PAUSED", `Paused orders page ${state.page} at order ${state.currentOrderIndex || 0}.`);
@@ -199,7 +201,7 @@ function executeGomagFetchOrdersPhase_(config, state, productMap, executionStart
     state.currentOrderItemIndex = 0;
     state.productLookupsThisTick = 0;
 
-    if (isGomagLastPage_(response, state.page, orders.length)) {
+    if (isGomagLastPage_(pagination, state.page, orders.length)) {
       state.phase = 'WRITE_DATA';
       state.writeStartIndex = 0;
       return;
@@ -292,6 +294,17 @@ function executeGomagWriteDataPhase_(config, state, productMap, executionStart, 
     `${summarizeCatalogRowsForOverview(rows, 0, 5)} Fetched individually: ${state.productsFetchedByOrder || 0}. Unmatched order items: ${state.unmatchedOrderItems || 0}`,
     config.days
   );
+
+  if ((state.productsFetchedByOrder || 0) > Math.max(25, Math.floor(allProducts.length * 0.1))) {
+    appendToOverviewLog(
+      ss,
+      GOMAG_ACCOUNT_SHEET_NAME,
+      "Gomag Catalog Audit",
+      "WARNING",
+      `${state.productsFetchedByOrder || 0} products were recovered from order-item lookups. Normal product pagination may still be incomplete.`,
+      config.days
+    );
+  }
 
   writeGomagUnmatchedDiagnostics_(ss, state);
 
@@ -747,14 +760,45 @@ function extractGomagItems_(response, preferredKeys) {
   return [];
 }
 
-function isGomagLastPage_(response, currentPage, itemCount) {
-  const pages = parseIntSafe(firstDefinedGomag_(response && response.pages, response && response.totalPages, ""), NaN);
+function isGomagLastPage_(pagination, currentPage, itemCount) {
+  const pages = pagination.pages;
   if (!isNaN(pages) && pages > 0) return currentPage >= pages;
 
-  const total = parseIntSafe(firstDefinedGomag_(response && response.total, response && response.totalItems, ""), NaN);
+  const total = pagination.total;
   if (!isNaN(total) && total >= 0) return currentPage * GOMAG_PAGE_SIZE >= total;
 
   return itemCount < GOMAG_PAGE_SIZE;
+}
+
+function getGomagPagination_(response) {
+  const containers = [
+    response,
+    response && response.data,
+    response && response.response,
+    response && response.meta,
+    response && response.pagination
+  ].filter(value => value && typeof value === 'object' && !Array.isArray(value));
+
+  for (let i = 0; i < containers.length; i++) {
+    const container = containers[i];
+    const pages = parseIntSafe(firstDefinedGomag_(container.pages, container.totalPages, container.total_pages, ""), NaN);
+    const total = parseIntSafe(firstDefinedGomag_(container.total, container.totalItems, container.total_items, container.count, ""), NaN);
+    const page = parseIntSafe(firstDefinedGomag_(container.page, container.currentPage, container.current_page, ""), NaN);
+
+    if (!isNaN(pages) || !isNaN(total) || !isNaN(page)) {
+      return { page: page, pages: pages, total: total };
+    }
+  }
+
+  return { page: NaN, pages: NaN, total: NaN };
+}
+
+function formatGomagPagination_(pagination) {
+  const parts = [];
+  if (!isNaN(pagination.page)) parts.push(`page=${pagination.page}`);
+  if (!isNaN(pagination.pages)) parts.push(`pages=${pagination.pages}`);
+  if (!isNaN(pagination.total)) parts.push(`total=${pagination.total}`);
+  return parts.length ? ` (${parts.join(", ")})` : "";
 }
 
 function extractNestedGomagCollection_(value, preferredKeys) {

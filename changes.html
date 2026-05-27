@@ -34,6 +34,7 @@ CHANGELOG
 - AdsScriptModal.html: Added daily scheduling guidance for the copied Google Ads Script, recommending 4:00 AM before the Sheets store auto-fetch.
 - runAllLabelCalculations.gs: Reads store source sheets by header name, writes `Catalog_Audit`, warns on blank product IDs, fails loudly on missing required source/GAds columns, and marks partial label runs in Overview/feed notes.
 - GomagData.gs / WooCommerceData.gs: Use API pagination metadata when available and add richer catalog completeness counts to sync logs.
+- GomagData.gs: Reads Gomag pagination metadata from nested response containers too and warns when many products are recovered through order-item lookups.
 - ShopifyData.gs / WooCommerceData.gs / GomagData.gs: Store sync logs now report usable IDs, blank IDs, products with orders, and products without orders.
 - AdsScriptModal.html / MenuSetup.gs: Renders Google Ads copy code via JSON + `textContent` so the modal cannot fail on script-like HTML content.
 - CommonUtilities.gs: Added Gomag defaults for product ID mode.
