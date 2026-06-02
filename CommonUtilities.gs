@@ -17,6 +17,7 @@ const PL_SCRIPT_VERSION = "2026-05-27";
 const PL_CENTRAL_INSTALL_LOGGED_AT = "PL_CENTRAL_INSTALL_LOGGED_AT";
 const PL_CENTRAL_LOG_DISABLED_UNTIL = "PL_CENTRAL_LOG_DISABLED_UNTIL";
 const PL_CENTRAL_LOG_DISABLE_MS = 6 * 60 * 60 * 1000;
+const PL_CENTRAL_LOG_OWNER_ONLY = false;
 
 const DEFAULT_LABEL_CONFIG = {
   Platform: '',
@@ -613,6 +614,7 @@ function logCentralEvent_(event) {
   try {
     if (!isCentralLoggingEnabled_()) return;
     if (isCentralLoggingTemporarilyDisabled_()) return;
+    if (!canCurrentUserWriteCentralLog_()) return;
 
     const lock = LockService.getScriptLock();
     if (!lock.tryLock(250)) return;
@@ -750,6 +752,64 @@ function shouldLogCentralStatus_(status) {
 
 function isCentralLoggingEnabled_() {
   return !!String(PL_CENTRAL_LOG_SHEET_URL || "").trim();
+}
+
+function canCurrentUserWriteCentralLog_() {
+  try {
+    if (!PL_CENTRAL_LOG_OWNER_ONLY) return true;
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) return false;
+
+    const ownerEmail = getSpreadsheetOwnerEmail_(ss);
+    const userEmail = getCurrentExecutorEmail_();
+    if (!ownerEmail || !userEmail) return false;
+
+    return ownerEmail.toLowerCase() === userEmail.toLowerCase();
+  } catch (e) {
+    console.warn("Central logging owner check failed: " + e.message);
+    return false;
+  }
+}
+
+function getSpreadsheetOwnerEmail_(ss) {
+  try {
+    if (ss && typeof ss.getOwner === "function") {
+      const owner = ss.getOwner();
+      if (owner && typeof owner.getEmail === "function") {
+        return String(owner.getEmail() || "").trim();
+      }
+    }
+  } catch (e) {}
+
+  try {
+    const file = DriveApp.getFileById(ss.getId());
+    const owner = file.getOwner();
+    return owner && typeof owner.getEmail === "function"
+      ? String(owner.getEmail() || "").trim()
+      : "";
+  } catch (e) {
+    return "";
+  }
+}
+
+function getCurrentExecutorEmail_() {
+  try {
+    const effectiveUser = Session.getEffectiveUser();
+    const effectiveEmail = effectiveUser && typeof effectiveUser.getEmail === "function"
+      ? String(effectiveUser.getEmail() || "").trim()
+      : "";
+    if (effectiveEmail) return effectiveEmail;
+  } catch (e) {}
+
+  try {
+    const activeUser = Session.getActiveUser();
+    return activeUser && typeof activeUser.getEmail === "function"
+      ? String(activeUser.getEmail() || "").trim()
+      : "";
+  } catch (e) {
+    return "";
+  }
 }
 
 function isCentralLoggingTemporarilyDisabled_() {
