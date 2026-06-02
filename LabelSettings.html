@@ -17,6 +17,31 @@
     .full-width { grid-column: 1 / -1; }
     
     label { display: block; font-weight: 500; margin-bottom: 4px; color: #3c4043; font-size: 12px; }
+    .label-with-info {
+      display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
+      color: #3c4043; font-size: 12px; font-weight: 500;
+    }
+    .label-with-info label { margin-bottom: 0; }
+    .info-icon {
+      position: relative; display: inline-flex; align-items: center; justify-content: center;
+      width: 16px; height: 16px; border: 1px solid #dadce0; border-radius: 50%;
+      background: #fff; color: #5f6368; font-size: 11px; font-weight: 700;
+      line-height: 1; cursor: help; flex: 0 0 16px;
+    }
+    .info-icon::after {
+      content: attr(data-info); display: none; position: absolute; left: 50%; bottom: 22px;
+      transform: translateX(-50%); width: 260px; max-width: min(260px, calc(100vw - 60px));
+      background: #202124; color: #fff; border-radius: 6px; padding: 8px 10px;
+      font-size: 11px; font-weight: 400; line-height: 1.35; z-index: 20;
+      box-shadow: 0 2px 8px rgba(60,64,67,.28); white-space: normal;
+    }
+    .info-icon::before {
+      content: ""; display: none; position: absolute; left: 50%; bottom: 17px;
+      transform: translateX(-50%); border: 5px solid transparent; border-top-color: #202124;
+      z-index: 21;
+    }
+    .info-icon:hover::after, .info-icon:hover::before,
+    .info-icon:focus::after, .info-icon:focus::before { display: block; }
     .hint { font-size: 11px; color: #80868b; margin-top: 3px; }
     
     input[type="text"], input[type="number"], select {
@@ -56,12 +81,12 @@
       <div class="panel-title">⏱️ Timeframes</div>
       <div class="grid">
         <div>
-          <label>Analysis Timeframe (Days)</label>
+          <div id="help-timeframeDays"></div>
           <input type="number" id="timeframeDays" min="1">
           <div class="hint">How many days back to analyze.</div>
         </div>
         <div>
-          <label>New Product Window (Days)</label>
+          <div id="help-newProductDays"></div>
           <input type="number" id="newProductDays" min="1">
           <div class="hint">Defines "new" vs old products.</div>
         </div>
@@ -72,27 +97,27 @@
       <div class="panel-title">🎯 Google Ads Thresholds</div>
       <div class="grid">
         <div>
-          <label>Good ROAS (≥)</label>
+          <div id="help-roasGood"></div>
           <input type="number" id="roasGood" step="0.1">
         </div>
         <div>
-          <label>Bad ROAS (<)</label>
+          <div id="help-roasBad"></div>
           <input type="number" id="roasBad" step="0.1">
         </div>
         <div>
-          <label>Good Conv. Rate (%) (≥)</label>
+          <div id="help-cvrGood"></div>
           <input type="number" id="cvrGood" step="0.1">
         </div>
         <div>
-          <label>Bad Conv. Rate (%) (<)</label>
+          <div id="help-cvrBad"></div>
           <input type="number" id="cvrBad" step="0.1">
         </div>
         <div>
-          <label>High Clicks (≥)</label>
+          <div id="help-clicksHigh"></div>
           <input type="number" id="clicksHigh">
         </div>
         <div>
-          <label>Low Clicks (<)</label>
+          <div id="help-clicksLow"></div>
           <input type="number" id="clicksLow">
         </div>
       </div>
@@ -102,20 +127,20 @@
       <div class="panel-title">💰 Store Revenue & Sales</div>
       <div class="grid">
         <div>
-          <label>High Revenue (%) (≥)</label>
+          <div id="help-revHigh"></div>
           <input type="number" id="revHigh">
           <div class="hint">% of account average.</div>
         </div>
         <div>
-          <label>Low Revenue (%) (<)</label>
+          <div id="help-revLow"></div>
           <input type="number" id="revLow">
         </div>
         <div>
-          <label>High Orders Threshold</label>
+          <div id="help-minOrders"></div>
           <input type="number" id="minOrders">
         </div>
         <div>
-          <label>Price Grouping Interval</label>
+          <div id="help-priceStep"></div>
           <input type="number" id="priceStep" step="1">
           <div class="hint">E.g., 50 chunks into 0-50, 50-100.</div>
         </div>
@@ -126,11 +151,11 @@
       <div class="panel-title">🔑 Secondary Feed ID Formatting</div>
       <div class="grid">
         <div>
-          <label>GMC_Feed_2 Prefix</label>
+          <div id="help-idPrefix"></div>
           <input type="text" id="idPrefix" placeholder="Optional">
         </div>
         <div>
-          <label>GMC_Feed_2 Suffix</label>
+          <div id="help-idSuffix"></div>
           <input type="text" id="idSuffix" placeholder="Optional">
         </div>
       </div>
@@ -140,23 +165,23 @@
       <div class="panel-title">🏷️ Label Output Mappings</div>
       <div class="grid">
         <div class="full-width hint" style="margin-bottom: 8px; margin-top: -6px;">
-          Define where resulting metrics sit. Map to `custom_label_0` thru `4`. Leave blank to disable export.
+          Choose where each label is written in Merchant Center. Select Disabled to skip export.
         </div>
-        <div><label>GAds ROAS</label><input type="text" id="outGAdsRoas"></div>
-        <div><label>GAds Conv. Rate</label><input type="text" id="outGAdsCvr"></div>
-        <div><label>GAds Clicks</label><input type="text" id="outGAdsClicks"></div>
+        <div><div id="help-outGAdsRoas"></div><select id="outGAdsRoas" class="label-output-select"></select></div>
+        <div><div id="help-outGAdsCvr"></div><select id="outGAdsCvr" class="label-output-select"></select></div>
+        <div><div id="help-outGAdsClicks"></div><select id="outGAdsClicks" class="label-output-select"></select></div>
         
-        <div><label>Rev. Has/No</label><input type="text" id="outRevSimple"></div>
-        <div><label>Rev. High/Low</label><input type="text" id="outRevAdvanced"></div>
+        <div><div id="help-outRevSimple"></div><select id="outRevSimple" class="label-output-select"></select></div>
+        <div><div id="help-outRevAdvanced"></div><select id="outRevAdvanced" class="label-output-select"></select></div>
         
-        <div><label>Orders Rate</label><input type="text" id="outOrders"></div>
-        <div><label>Price Intervals</label><input type="text" id="outPriceInterval"></div>
+        <div><div id="help-outOrders"></div><select id="outOrders" class="label-output-select"></select></div>
+        <div><div id="help-outPriceInterval"></div><select id="outPriceInterval" class="label-output-select"></select></div>
         
-        <div><label>Variant Status</label><input type="text" id="outVariants"></div>
-        <div><label>Sales Trend</label><input type="text" id="outTrend"></div>
+        <div><div id="help-outVariants"></div><select id="outVariants" class="label-output-select"></select></div>
+        <div><div id="help-outTrend"></div><select id="outTrend" class="label-output-select"></select></div>
         
-        <div><label>New Product Tag</label><input type="text" id="outNewProduct"></div>
-        <div><label>Performance Index</label><input type="text" id="outPerfIndex"></div>
+        <div><div id="help-outNewProduct"></div><select id="outNewProduct" class="label-output-select"></select></div>
+        <div><div id="help-outPerfIndex"></div><select id="outPerfIndex" class="label-output-select"></select></div>
       </div>
     </div>
   </div>
@@ -169,6 +194,126 @@
   </div>
 
   <script>
+    const LABEL_OUTPUT_IDS = [
+      'outGAdsRoas',
+      'outGAdsCvr',
+      'outGAdsClicks',
+      'outRevSimple',
+      'outRevAdvanced',
+      'outPriceInterval',
+      'outOrders',
+      'outVariants',
+      'outTrend',
+      'outNewProduct',
+      'outPerfIndex'
+    ];
+
+    const SETTING_HELP = {
+      timeframeDays: {
+        label: 'Analysis Timeframe (Days)',
+        info: 'How far back store orders and Google Ads metrics are analyzed. Example: 30 means the last 30 days.'
+      },
+      newProductDays: {
+        label: 'New Product Window (Days)',
+        info: 'Products created inside this many days can receive the new_product label. Older products stay blank for this label.'
+      },
+      roasGood: {
+        label: 'Good ROAS (≥)',
+        info: 'If a product has enough clicks and ROAS is at or above this value, it receives high_roas.'
+      },
+      roasBad: {
+        label: 'Bad ROAS (<)',
+        info: 'If a product has enough clicks and ROAS is below this value, it receives low_roas. Products with no conversion value receive no_roas.'
+      },
+      cvrGood: {
+        label: 'Good Conv. Rate (%) (≥)',
+        info: 'If a product has conversions, enough clicks, and conversion rate is at or above this percentage, it receives high_cvr.'
+      },
+      cvrBad: {
+        label: 'Bad Conv. Rate (%) (<)',
+        info: 'If a product has enough clicks and conversion rate is below this percentage, it receives low_cvr. Products with zero conversions receive no_cvr.'
+      },
+      clicksHigh: {
+        label: 'High Clicks (≥)',
+        info: 'Products with clicks at or above this value receive high_clicks.'
+      },
+      clicksLow: {
+        label: 'Low Clicks (<)',
+        info: 'Products with clicks below this value receive low_clicks. Products with zero clicks receive no_clicks.'
+      },
+      revHigh: {
+        label: 'High Revenue (%) (≥)',
+        info: 'Advanced revenue label threshold. Products with revenue at or above this percent of average product revenue receive high_revenue.'
+      },
+      revLow: {
+        label: 'Low Revenue (%) (<)',
+        info: 'Advanced revenue label threshold. Products with revenue below this percent of average product revenue receive low_revenue.'
+      },
+      minOrders: {
+        label: 'High Orders Threshold',
+        info: 'Products with at least this many orders receive high_orders. One sale receives one_order; no revenue/orders receives no_orders.'
+      },
+      priceStep: {
+        label: 'Price Grouping Interval',
+        info: 'Bucket size for price labels. Example: 50 creates price_0_50, price_50_100, price_100_150, and so on.'
+      },
+      idPrefix: {
+        label: 'GMC_Feed_2 Prefix',
+        info: 'Optional text added before every ID in GMC_Feed_2. Used when a secondary supplemental feed needs different IDs.'
+      },
+      idSuffix: {
+        label: 'GMC_Feed_2 Suffix',
+        info: 'Optional text added after every ID in GMC_Feed_2. Leave blank if the secondary feed should not add a suffix.'
+      },
+      outGAdsRoas: {
+        label: 'GAds ROAS',
+        info: 'Choose the Merchant Center custom label column for high_roas, avg_roas, low_roas, and no_roas.'
+      },
+      outGAdsCvr: {
+        label: 'GAds Conv. Rate',
+        info: 'Choose the custom label column for high_cvr, avg_cvr, low_cvr, and no_cvr.'
+      },
+      outGAdsClicks: {
+        label: 'GAds Clicks',
+        info: 'Choose the custom label column for high_clicks, avg_clicks, low_clicks, and no_clicks.'
+      },
+      outRevSimple: {
+        label: 'Rev. Has/No',
+        info: 'Choose the custom label column for has_revenue and no_revenue.'
+      },
+      outRevAdvanced: {
+        label: 'Rev. High/Low',
+        info: 'Choose the custom label column for high_revenue, avg_revenue, low_revenue, and no_revenue.'
+      },
+      outOrders: {
+        label: 'Orders Rate',
+        info: 'Choose the custom label column for high_orders, average_orders, one_order, and no_orders.'
+      },
+      outPriceInterval: {
+        label: 'Price Intervals',
+        info: 'Choose the custom label column for dynamic price bucket labels such as price_0_50.'
+      },
+      outVariants: {
+        label: 'Variant Status',
+        info: 'Choose the custom label column for available variant ratios such as 2/3.'
+      },
+      outTrend: {
+        label: 'Sales Trend',
+        info: 'Choose the custom label column for up_trend, stable_trend, down_trend, recent_activity_only, and no_trend.'
+      },
+      outNewProduct: {
+        label: 'New Product Tag',
+        info: 'Choose the custom label column for new_product. Older products are blank.'
+      },
+      outPerfIndex: {
+        label: 'Performance Index',
+        info: 'Choose the custom label column for INDEX, NEAR-INDEX, LOW-INDEX, NO-INDEX, and EXCLUDE-INDEX.'
+      }
+    };
+
+    initializeHelpLabels();
+    initializeLabelOutputSelects();
+
     google.script.run
       .withSuccessHandler(function(data) {
         document.getElementById('timeframeDays').value = data.timeframeDays;
@@ -200,6 +345,47 @@
         document.getElementById('outPerfIndex').value = data.outPerfIndex;
       })
       .getLabelSettingsForDialog();
+
+    function initializeLabelOutputSelects() {
+      const options = [
+        { value: '', label: 'Disabled' },
+        { value: 'custom_label_0', label: 'custom_label_0' },
+        { value: 'custom_label_1', label: 'custom_label_1' },
+        { value: 'custom_label_2', label: 'custom_label_2' },
+        { value: 'custom_label_3', label: 'custom_label_3' },
+        { value: 'custom_label_4', label: 'custom_label_4' }
+      ];
+
+      LABEL_OUTPUT_IDS.forEach(function(id) {
+        const select = document.getElementById(id);
+        if (!select) return;
+        select.innerHTML = options.map(function(option) {
+          return '<option value="' + option.value + '">' + option.label + '</option>';
+        }).join('');
+      });
+    }
+
+    function initializeHelpLabels() {
+      Object.keys(SETTING_HELP).forEach(function(id) {
+        const target = document.getElementById('help-' + id);
+        if (!target) return;
+        const item = SETTING_HELP[id];
+        target.innerHTML =
+          '<div class="label-with-info">' +
+          '<label for="' + id + '">' + escapeHtml(item.label) + '</label>' +
+          '<span class="info-icon" tabindex="0" title="' + escapeHtml(item.info) + '" data-info="' + escapeHtml(item.info) + '">?</span>' +
+          '</div>';
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
 
     function saveData() {
       const payload = {
