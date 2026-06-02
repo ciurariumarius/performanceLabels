@@ -349,12 +349,16 @@ function saveSettingsFromDialog(payload) {
     props.setProperty('GA4_PROPERTY_ID', payload.ga4PropertyId || '');
   }
 
-  logCentralEvent_({
-    component: "Platform Settings",
-    status: "SUCCESS",
-    details: `Settings saved for ${payload.platform || getActivePlatform() || "unknown platform"}.`,
-    eventSource: "saveSettingsFromDialog"
-  });
+  try {
+    logCentralEvent_({
+      component: "Platform Settings",
+      status: "SUCCESS",
+      details: `Settings saved for ${payload.platform || getActivePlatform() || "unknown platform"}.`,
+      eventSource: "saveSettingsFromDialog"
+    });
+  } catch (e) {
+    console.warn("Central settings logging failed: " + e.message);
+  }
 }
 
 function parseJsonProperty_(props, key, fallback) {
@@ -469,13 +473,17 @@ function saveLabelSettingsFromDialog(payload) {
   props.setProperty('CFG_OUT_NEW', payload.outNewProduct);
   props.setProperty('CFG_OUT_PERF', payload.outPerfIndex);
 
-  logCentralEvent_({
-    component: "Label Settings",
-    status: "SUCCESS",
-    details: `Label settings saved. Timeframe: ${payload.timeframeDays || "-"} days.`,
-    timeframe: payload.timeframeDays || "-",
-    eventSource: "saveLabelSettingsFromDialog"
-  });
+  try {
+    logCentralEvent_({
+      component: "Label Settings",
+      status: "SUCCESS",
+      details: `Label settings saved. Timeframe: ${payload.timeframeDays || "-"} days.`,
+      timeframe: payload.timeframeDays || "-",
+      eventSource: "saveLabelSettingsFromDialog"
+    });
+  } catch (e) {
+    console.warn("Central label settings logging failed: " + e.message);
+  }
 }
 
 // ---------------------------------------------------------------------------

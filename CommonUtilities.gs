@@ -15,6 +15,8 @@ const PL_CENTRAL_LOG_SHEET_URL = "https://docs.google.com/spreadsheets/d/1QhHGHM
 const PL_CENTRAL_LOG_TAB = "Events";
 const PL_SCRIPT_VERSION = "2026-05-27";
 const PL_CENTRAL_INSTALL_LOGGED_AT = "PL_CENTRAL_INSTALL_LOGGED_AT";
+const PL_CENTRAL_LOG_DISABLED_UNTIL = "PL_CENTRAL_LOG_DISABLED_UNTIL";
+const PL_CENTRAL_LOG_DISABLE_MS = 6 * 60 * 60 * 1000;
 
 const DEFAULT_LABEL_CONFIG = {
   Platform: '',
@@ -610,6 +612,7 @@ function logCentralInstallSeen_() {
 function logCentralEvent_(event) {
   try {
     if (!isCentralLoggingEnabled_()) return;
+    if (isCentralLoggingTemporarilyDisabled_()) return;
 
     const lock = LockService.getScriptLock();
     if (!lock.tryLock(250)) return;
@@ -639,6 +642,7 @@ function logCentralEvent_(event) {
       lock.releaseLock();
     }
   } catch (e) {
+    temporarilyDisableCentralLogging_();
     console.warn("Central logging failed: " + e.message);
   }
 }
@@ -746,6 +750,24 @@ function shouldLogCentralStatus_(status) {
 
 function isCentralLoggingEnabled_() {
   return !!String(PL_CENTRAL_LOG_SHEET_URL || "").trim();
+}
+
+function isCentralLoggingTemporarilyDisabled_() {
+  try {
+    const disabledUntil = Number(PropertiesService.getScriptProperties().getProperty(PL_CENTRAL_LOG_DISABLED_UNTIL) || 0);
+    return disabledUntil && Date.now() < disabledUntil;
+  } catch (e) {
+    return false;
+  }
+}
+
+function temporarilyDisableCentralLogging_() {
+  try {
+    PropertiesService.getScriptProperties().setProperty(
+      PL_CENTRAL_LOG_DISABLED_UNTIL,
+      String(Date.now() + PL_CENTRAL_LOG_DISABLE_MS)
+    );
+  } catch (e) {}
 }
 
 // =========================================================================================
