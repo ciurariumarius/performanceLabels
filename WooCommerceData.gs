@@ -176,6 +176,9 @@ function executeFetchProductsPhase_(config, state, productMap, executionStart) {
 
       totalPages = Math.max(totalPages, getWooTotalPages_(res));
       const products = JSON.parse(res.getContentText());
+      if (!Array.isArray(products)) {
+        throw new Error(`WooCommerce products API returned an unexpected response shape on page ${state.page + index}.`);
+      }
       if (products.length > 0) {
         batchHasData = true;
         products.forEach(p => {
@@ -243,12 +246,15 @@ function executeFetchOrdersPhase_(config, state, productMap, executionStart) {
 
       totalPages = Math.max(totalPages, getWooTotalPages_(res));
       const orders = JSON.parse(res.getContentText());
+      if (!Array.isArray(orders)) {
+        throw new Error("WooCommerce orders API returned an unexpected response shape.");
+      }
       if (orders.length > 0) {
         batchHasData = true;
         orders.forEach(order => {
           state.uniqueOrdersCount++;
           const orderDate = new Date(order.date_created_gmt + "Z");
-          if (order.line_items) {
+          if (Array.isArray(order.line_items)) {
             order.line_items.forEach(item => {
               const pid = item.product_id;
               if (productMap[pid]) {

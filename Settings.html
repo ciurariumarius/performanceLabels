@@ -523,11 +523,12 @@
     function renderGomagOrderStatuses(statuses, selectedIds) {
       var container = document.getElementById('gomag-order-statuses');
       var selected = {};
-      (selectedIds || []).forEach(function(id) {
+      (Array.isArray(selectedIds) ? selectedIds : []).forEach(function(id) {
         selected[String(id)] = true;
       });
 
-      if (!statuses || statuses.length === 0) {
+      statuses = Array.isArray(statuses) ? statuses : [];
+      if (statuses.length === 0) {
         container.innerHTML = '<div class="empty-state">No Gomag statuses discovered yet. Save credentials and run Gomag sync once.</div>';
         return;
       }

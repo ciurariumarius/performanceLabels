@@ -575,6 +575,8 @@ function logGAdsIdMatchAuditToOverview_(ss, sourceData, gadsIds) {
 }
 
 function logSingleGAdsIdMatchAudit_(ss, component, gadsIds, platformIdSet) {
+  gadsIds = Array.isArray(gadsIds) ? gadsIds : [];
+  platformIdSet = platformIdSet || {};
   const unmatched = [];
   let matched = 0;
 

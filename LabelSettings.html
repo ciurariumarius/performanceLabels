@@ -46,6 +46,26 @@
       border: 1px solid #fbbc04; border-radius: 6px; background: #fff8e1;
       color: #5f4200; font-size: 12px; line-height: 1.35;
     }
+    .mapping-summary {
+      grid-column: 1 / -1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 6px; margin: 8px 0 0;
+    }
+    .mapping-summary-item {
+      min-height: 44px; border: 1px solid #edf0f3; border-radius: 6px; background: #fbfcfe;
+      padding: 7px; overflow: hidden; font-style: italic;
+    }
+    .mapping-summary-key {
+      display: inline-block; font-size: 10px; font-weight: 600; color: #5f6368;
+      margin-bottom: 3px;
+    }
+    .mapping-summary-label {
+      font-size: 10px; font-weight: 600; color: #5f6368; margin-bottom: 2px;
+    }
+    .mapping-summary-value {
+      font-size: 10px; color: #80868b; line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+    .mapping-summary-empty { color: #80868b; font-style: italic; }
     
     input[type="text"], input[type="number"], select {
       width: 100%; padding: 8px 10px; border: 1px solid #dadce0;
@@ -98,6 +118,7 @@
 
         <div><div id="help-outNewProduct"></div><select id="outNewProduct" class="label-output-select"></select></div>
         <div><div id="help-outPerfIndex"></div><select id="outPerfIndex" class="label-output-select"></select></div>
+        <div id="mapping-summary" class="mapping-summary"></div>
       </div>
     </div>
 
@@ -268,47 +289,58 @@
       },
       outGAdsRoas: {
         label: 'GAds ROAS',
-        info: 'Choose the Merchant Center custom label column for high_roas, avg_roas, low_roas, and no_roas.'
+        info: 'Choose the Merchant Center custom label column for high_roas, avg_roas, low_roas, and no_roas.',
+        values: 'high_roas, avg_roas, low_roas, no_roas'
       },
       outGAdsCvr: {
         label: 'GAds Conv. Rate',
-        info: 'Choose the custom label column for high_cvr, avg_cvr, low_cvr, and no_cvr.'
+        info: 'Choose the custom label column for high_cvr, avg_cvr, low_cvr, and no_cvr.',
+        values: 'high_cvr, avg_cvr, low_cvr, no_cvr'
       },
       outGAdsClicks: {
         label: 'GAds Clicks',
-        info: 'Choose the custom label column for high_clicks, avg_clicks, low_clicks, and no_clicks.'
+        info: 'Choose the custom label column for high_clicks, avg_clicks, low_clicks, and no_clicks.',
+        values: 'high_clicks, avg_clicks, low_clicks, no_clicks'
       },
       outRevSimple: {
         label: 'Rev. Has/No',
-        info: 'Choose the custom label column for has_revenue and no_revenue.'
+        info: 'Choose the custom label column for has_revenue and no_revenue.',
+        values: 'has_revenue, no_revenue'
       },
       outRevAdvanced: {
         label: 'Rev. High/Low',
-        info: 'Choose the custom label column for high_revenue, avg_revenue, low_revenue, and no_revenue.'
+        info: 'Choose the custom label column for high_revenue, avg_revenue, low_revenue, and no_revenue.',
+        values: 'high_revenue, avg_revenue, low_revenue, no_revenue'
       },
       outOrders: {
         label: 'Orders Rate',
-        info: 'Choose the custom label column for high_orders, average_orders, one_order, and no_orders.'
+        info: 'Choose the custom label column for high_orders, average_orders, one_order, and no_orders.',
+        values: 'high_orders, average_orders, one_order, no_orders'
       },
       outPriceInterval: {
         label: 'Price Intervals',
-        info: 'Choose the custom label column for dynamic price bucket labels such as price_0_50.'
+        info: 'Choose the custom label column for dynamic price bucket labels such as price_0_50.',
+        values: 'price_0_50, price_50_100, dynamic price buckets'
       },
       outVariants: {
         label: 'Variant Status',
-        info: 'Choose the custom label column for available variant ratios such as 2/3.'
+        info: 'Choose the custom label column for available variant ratios such as 2/3.',
+        values: 'available variant ratios, e.g. 2/3'
       },
       outTrend: {
         label: 'Sales Trend',
-        info: 'Choose the custom label column for up_trend, stable_trend, down_trend, recent_activity_only, and no_trend.'
+        info: 'Choose the custom label column for up_trend, stable_trend, down_trend, recent_activity_only, and no_trend.',
+        values: 'up_trend, stable_trend, down_trend, recent_activity_only, no_trend'
       },
       outNewProduct: {
         label: 'New Product Tag',
-        info: 'Choose the custom label column for new_product. Older products are blank.'
+        info: 'Choose the custom label column for new_product. Older products are blank.',
+        values: 'new_product, blank'
       },
       outPerfIndex: {
         label: 'Performance Index',
-        info: 'Choose the custom label column for INDEX, NEAR-INDEX, LOW-INDEX, NO-INDEX, and EXCLUDE-INDEX.'
+        info: 'Choose the custom label column for INDEX, NEAR-INDEX, LOW-INDEX, NO-INDEX, and EXCLUDE-INDEX.',
+        values: 'INDEX, NEAR-INDEX, LOW-INDEX, NO-INDEX, EXCLUDE-INDEX'
       }
     };
 
@@ -366,10 +398,12 @@
         }).join('');
         select.addEventListener('change', updateMappingWarning);
       });
+      updateMappingSummary();
     }
 
     function updateMappingWarning() {
       const warning = document.getElementById('mapping-warning');
+      updateMappingSummary();
       if (!warning) return;
 
       const used = {};
@@ -396,6 +430,44 @@
         return key + ': ' + used[key].join(', ');
       }).join(' | ') + '. Duplicate mappings are allowed, but Merchant Center has only one output column for each custom label.';
       warning.style.display = 'block';
+    }
+
+    function updateMappingSummary() {
+      const summary = document.getElementById('mapping-summary');
+      if (!summary) return;
+
+      const mapped = {
+        custom_label_0: [],
+        custom_label_1: [],
+        custom_label_2: [],
+        custom_label_3: [],
+        custom_label_4: []
+      };
+
+      LABEL_OUTPUT_IDS.forEach(function(id) {
+        const select = document.getElementById(id);
+        const value = select ? select.value : '';
+        if (!mapped[value]) return;
+        const help = SETTING_HELP[id] || {};
+        mapped[value].push({
+          label: help.label || id,
+          values: help.values || help.info || ''
+        });
+      });
+
+      summary.innerHTML = Object.keys(mapped).map(function(key) {
+        const items = mapped[key];
+        const value = items.length
+          ? items.map(function(item) {
+              return '<div class="mapping-summary-label">' + escapeHtml(item.label) + '</div>' +
+                '<div>' + escapeHtml(item.values) + '</div>';
+            }).join('')
+          : '<span class="mapping-summary-empty">not set</span>';
+        return '<div class="mapping-summary-item">' +
+          '<div class="mapping-summary-key">' + key + '</div>' +
+          '<div class="mapping-summary-value">' + value + '</div>' +
+          '</div>';
+      }).join('');
     }
 
     function initializeHelpLabels() {

@@ -168,9 +168,10 @@ function executeShopifyFetchProductsPhase_(config, state, productMap, executionS
     if (response) {
       const data = JSON.parse(response.content);
       
-      if (data.products && data.products.length > 0) {
-        data.products.forEach(product => {
-          product.variants?.forEach(variant => {
+      const products = Array.isArray(data.products) ? data.products : [];
+      if (products.length > 0) {
+        products.forEach(product => {
+          (Array.isArray(product.variants) ? product.variants : []).forEach(variant => {
             let formattedProductId;
             if (config.idFormat === 'variant_id') {
               formattedProductId = String(variant.id);
@@ -241,15 +242,16 @@ function executeShopifyFetchOrdersPhase_(config, state, productMap, executionSta
     if (response) {
       const data = JSON.parse(response.content);
       
-      if (data.orders && data.orders.length > 0) {
-        data.orders.forEach(order => {
+      const orders = Array.isArray(data.orders) ? data.orders : [];
+      if (orders.length > 0) {
+        orders.forEach(order => {
           if (order.cancelled_at || order.financial_status !== 'paid') return;
 
           state.uniqueOrdersCount++;
           const orderDate = new Date(order.created_at);
           const isRecent = orderDate >= fourteenDaysAgo;
 
-          order.line_items?.forEach(item => {
+          (Array.isArray(order.line_items) ? order.line_items : []).forEach(item => {
             const pInfo = productMap[item.variant_id];
             if (pInfo) {
                const itemQty = parseIntSafe(item.quantity, 0);

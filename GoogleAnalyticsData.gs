@@ -92,8 +92,9 @@ function fetch14DayRevenue_GA4_(propertyId, startDate, endDate) {
     };
 
     const report = AnalyticsData.Properties.runReport(request, 'properties/' + propertyId);
-    if (report.rows) {
-      report.rows.forEach(row => {
+    const rows = Array.isArray(report.rows) ? report.rows : [];
+    if (rows.length) {
+      rows.forEach(row => {
         const itemId = row.dimensionValues[0].value;
         const revenue = parseFloatSafe(row.metricValues[0].value, 0.0);
         itemRevenue14DayMap[itemId] = revenue;
@@ -128,8 +129,9 @@ function fetchAndProcessMainReport_GA4_(propertyId, startDate, endDate, itemReve
   const analyticsSheetRows = [];
   const totals = { totalRevenue: 0, itemsViewed: 0, itemsAddedToCart: 0, itemsPurchased: 0 };
 
-  if (report.rows) {
-    report.rows.forEach(row => {
+  const rows = Array.isArray(report.rows) ? report.rows : [];
+  if (rows.length) {
+    rows.forEach(row => {
       const itemId = row.dimensionValues[0].value;
       const itemName = row.dimensionValues[1].value;
       const itemCategory = row.dimensionValues[2] ? row.dimensionValues[2].value : "N/A";
