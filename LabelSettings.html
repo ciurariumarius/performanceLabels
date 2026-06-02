@@ -41,6 +41,11 @@
     .info-icon:hover::after, .info-icon:hover::before,
     .info-icon:focus::after, .info-icon:focus::before { display: block; }
     .hint { font-size: 11px; color: #80868b; margin-top: 3px; }
+    .mapping-warning {
+      display: none; grid-column: 1 / -1; padding: 10px 12px;
+      border: 1px solid #fbbc04; border-radius: 6px; background: #fff8e1;
+      color: #5f4200; font-size: 12px; line-height: 1.35;
+    }
     
     input[type="text"], input[type="number"], select {
       width: 100%; padding: 8px 10px; border: 1px solid #dadce0;
@@ -77,6 +82,7 @@
         <div class="full-width hint" style="margin-bottom: 8px; margin-top: -6px;">
           Choose where each label is written in Merchant Center. Select Disabled to skip export.
         </div>
+        <div id="mapping-warning" class="mapping-warning"></div>
         <div><div id="help-outGAdsRoas"></div><select id="outGAdsRoas" class="label-output-select"></select></div>
         <div><div id="help-outGAdsCvr"></div><select id="outGAdsCvr" class="label-output-select"></select></div>
         <div><div id="help-outGAdsClicks"></div><select id="outGAdsClicks" class="label-output-select"></select></div>
@@ -92,22 +98,6 @@
 
         <div><div id="help-outNewProduct"></div><select id="outNewProduct" class="label-output-select"></select></div>
         <div><div id="help-outPerfIndex"></div><select id="outPerfIndex" class="label-output-select"></select></div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">⏱️ Timeframes</div>
-      <div class="grid">
-        <div>
-          <div id="help-timeframeDays"></div>
-          <input type="number" id="timeframeDays" min="1">
-          <div class="hint">How many days back to analyze.</div>
-        </div>
-        <div>
-          <div id="help-newProductDays"></div>
-          <input type="number" id="newProductDays" min="1">
-          <div class="hint">Defines "new" vs old products.</div>
-        </div>
       </div>
     </div>
 
@@ -161,6 +151,22 @@
           <div id="help-priceStep"></div>
           <input type="number" id="priceStep" step="1">
           <div class="hint">E.g., 50 chunks into 0-50, 50-100.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">⏱️ Timeframes</div>
+      <div class="grid">
+        <div>
+          <div id="help-timeframeDays"></div>
+          <input type="number" id="timeframeDays" min="1">
+          <div class="hint">How many days back to analyze.</div>
+        </div>
+        <div>
+          <div id="help-newProductDays"></div>
+          <input type="number" id="newProductDays" min="1">
+          <div class="hint">Defines "new" vs old products.</div>
         </div>
       </div>
     </div>
@@ -338,6 +344,7 @@
         document.getElementById('outTrend').value = data.outTrend;
         document.getElementById('outNewProduct').value = data.outNewProduct;
         document.getElementById('outPerfIndex').value = data.outPerfIndex;
+        updateMappingWarning();
       })
       .getLabelSettingsForDialog();
 
@@ -357,7 +364,38 @@
         select.innerHTML = options.map(function(option) {
           return '<option value="' + option.value + '">' + option.label + '</option>';
         }).join('');
+        select.addEventListener('change', updateMappingWarning);
       });
+    }
+
+    function updateMappingWarning() {
+      const warning = document.getElementById('mapping-warning');
+      if (!warning) return;
+
+      const used = {};
+      LABEL_OUTPUT_IDS.forEach(function(id) {
+        const select = document.getElementById(id);
+        const value = select ? select.value : '';
+        if (!value) return;
+
+        if (!used[value]) used[value] = [];
+        used[value].push(SETTING_HELP[id] ? SETTING_HELP[id].label : id);
+      });
+
+      const duplicates = Object.keys(used).filter(function(key) {
+        return used[key].length > 1;
+      });
+
+      if (!duplicates.length) {
+        warning.style.display = 'none';
+        warning.textContent = '';
+        return;
+      }
+
+      warning.textContent = duplicates.map(function(key) {
+        return key + ': ' + used[key].join(', ');
+      }).join(' | ') + '. Duplicate mappings are allowed, but Merchant Center has only one output column for each custom label.';
+      warning.style.display = 'block';
     }
 
     function initializeHelpLabels() {

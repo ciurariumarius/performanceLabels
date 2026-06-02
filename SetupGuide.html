@@ -55,10 +55,14 @@
       return 'optional';
     }
 
+    function badgeText(state) {
+      return state === 'Missing' ? 'Needs setup' : state;
+    }
+
     function renderStep(title, status, actionLabel, actionName) {
       var badge = status.state === 'Optional' || status.state === 'Manual worker only'
         ? ''
-        : '<span class="badge ' + badgeClass(status.state) + '">' + status.state + '</span>';
+        : '<span class="badge ' + badgeClass(status.state) + '">' + badgeText(status.state) + '</span>';
 
       return [
         '<div class="step">',
@@ -75,10 +79,10 @@
     function render(data) {
       document.getElementById('platform').textContent = data.platformLabel;
       document.getElementById('steps').innerHTML = [
-        renderStep('1. Platform and API credentials', data.credentials, 'Open Settings', 'openSettings'),
-        renderStep('2. Label and timeframe settings', data.labels, 'Tune Labels', 'openLabelSettings'),
-        renderStep('3. Google Ads script', data.adsScript, 'Copy Script', 'openAdsScript'),
-        renderStep('4. Auto-fetch schedule', data.autoFetch, 'Set Schedule', 'setupSchedule')
+        renderStep('1. Platform & Store Setup', data.credentials, 'Configure Store', 'openSettings'),
+        renderStep('2. Label Mapping & Thresholds', data.labels, 'Configure Labels', 'openLabelSettings'),
+        renderStep('3. Google Ads Script', data.adsScript, 'Copy Ads Script', 'openAdsScript'),
+        renderStep('4. Auto-Fetch Schedule', data.autoFetch, 'Schedule Auto-Fetch', 'setupSchedule')
       ].join('');
     }
 

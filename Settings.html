@@ -5,8 +5,7 @@
   <base target="_top">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Google Sans', Arial, sans-serif; font-size: 13px; color: #202124; background: #fff; padding: 16px; }
-    h2 { font-size: 15px; font-weight: 600; margin-bottom: 16px; color: #1a73e8; }
+    body { font-family: 'Google Sans', Arial, sans-serif; font-size: 13px; color: #202124; background: #fff; padding: 16px 16px 86px; }
     .section { margin-bottom: 16px; }
     label { display: block; font-weight: 500; margin-bottom: 4px; color: #3c4043; }
     .hint { font-size: 11px; color: #80868b; margin-bottom: 6px; }
@@ -20,7 +19,7 @@
     .platform-btn {
       min-height: 72px; padding: 12px; border: 2px solid #dadce0; border-radius: 8px;
       background: #fff; cursor: pointer; text-align: left; transition: all .15s;
-      display: flex; align-items: center; gap: 12px;
+      display: flex; align-items: center; gap: 12px; position: relative;
     }
     .platform-btn:hover { border-color: #bdc1c6; background: #f8f9fa; }
     .platform-btn.active { border-color: #1a73e8; background: #e8f0fe; box-shadow: inset 4px 0 0 #1a73e8; }
@@ -33,12 +32,22 @@
     }
     .platform-name { font-size: 14px; font-weight: 700; color: #202124; margin-bottom: 2px; }
     .platform-desc { font-size: 11px; color: #5f6368; line-height: 1.25; }
+    .selected-badge {
+      display: none; position: absolute; right: 10px; top: 8px;
+      padding: 2px 7px; border-radius: 999px; background: #1a73e8;
+      color: #fff; font-size: 10px; font-weight: 700;
+    }
     .platform-btn.active .platform-name { color: #1a73e8; }
     .platform-btn.active .platform-icon { background: #fff; border-color: #1a73e8; color: #1a73e8; }
+    .platform-btn.active .selected-badge { display: inline-block; }
     .platform-section { display: none; }
     .platform-section.visible { display: block; }
     .divider { border: none; border-top: 1px solid #e8eaed; margin: 14px 0; }
-    .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+    .actions {
+      position: sticky; bottom: -16px; background: #fff; border-top: 1px solid #dadce0;
+      display: flex; justify-content: flex-end; gap: 8px; margin: 18px -16px -86px;
+      padding: 14px 16px;
+    }
     .btn {
       padding: 8px 18px; border-radius: 4px; font-size: 13px;
       font-weight: 500; cursor: pointer; border: none;
@@ -71,7 +80,32 @@
       border: 1px solid #e8eaed; border-radius: 8px; padding: 12px;
       background: #f8fafd; margin-bottom: 16px;
     }
-    .panel-title { font-size: 14px; font-weight: 700; color: #1a73e8; margin-bottom: 4px; }
+    .panel-title { font-size: 14px; font-weight: 700; color: #1a73e8; margin-bottom: 10px; }
+    .label-with-info {
+      display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
+      color: #3c4043; font-size: 13px; font-weight: 500;
+    }
+    .label-with-info label { margin-bottom: 0; }
+    .info-icon {
+      position: relative; display: inline-flex; align-items: center; justify-content: center;
+      width: 16px; height: 16px; border: 1px solid #dadce0; border-radius: 50%;
+      background: #fff; color: #5f6368; font-size: 11px; font-weight: 700;
+      line-height: 1; cursor: help; flex: 0 0 16px;
+    }
+    .info-icon::after {
+      content: attr(data-info); display: none; position: absolute; left: 50%; bottom: 22px;
+      transform: translateX(-50%); width: 260px; max-width: min(260px, calc(100vw - 60px));
+      background: #202124; color: #fff; border-radius: 6px; padding: 8px 10px;
+      font-size: 11px; font-weight: 400; line-height: 1.35; z-index: 20;
+      box-shadow: 0 2px 8px rgba(60,64,67,.28); white-space: normal;
+    }
+    .info-icon::before {
+      content: ""; display: none; position: absolute; left: 50%; bottom: 17px;
+      transform: translateX(-50%); border: 5px solid transparent; border-top-color: #202124;
+      z-index: 21;
+    }
+    .info-icon:hover::after, .info-icon:hover::before,
+    .info-icon:focus::after, .info-icon:focus::before { display: block; }
     .subsection { display: none; }
     .subsection.visible { display: block; }
     .readonly-value {
@@ -87,13 +121,11 @@
   </style>
 </head>
 <body>
-  <h2>⚙️ Platform & API Settings</h2>
-
-  <!-- Platform Selector -->
-  <div class="section">
-    <label>Platform</label>
+  <div class="panel">
+    <div class="panel-title">Platform</div>
     <div class="platform-toggle">
       <div class="platform-btn" id="btn-woo" onclick="setPlatform('woocommerce')">
+        <span class="selected-badge">Selected</span>
         <div class="platform-icon">WC</div>
         <div>
           <div class="platform-name">WooCommerce</div>
@@ -101,6 +133,7 @@
         </div>
       </div>
       <div class="platform-btn" id="btn-shopify" onclick="setPlatform('shopify')">
+        <span class="selected-badge">Selected</span>
         <div class="platform-icon">SH</div>
         <div>
           <div class="platform-name">Shopify</div>
@@ -108,6 +141,7 @@
         </div>
       </div>
       <div class="platform-btn" id="btn-gomag" onclick="setPlatform('gomag')">
+        <span class="selected-badge">Selected</span>
         <div class="platform-icon">GM</div>
         <div>
           <div class="platform-name">Gomag</div>
@@ -115,6 +149,7 @@
         </div>
       </div>
       <div class="platform-btn" id="btn-ga4" onclick="setPlatform('ga4')">
+        <span class="selected-badge">Selected</span>
         <div class="platform-icon">GA</div>
         <div>
           <div class="platform-name">GA4</div>
@@ -124,20 +159,100 @@
     </div>
   </div>
 
-  <hr class="divider">
+  <div id="section-credentials" class="platform-section panel">
+    <div class="panel-title">Store Credentials</div>
+
+    <!-- WooCommerce Fields -->
+    <div id="section-woocommerce" class="platform-section">
+      <div class="section">
+        <label>WooCommerce Domain</label>
+        <div class="hint">e.g., myshop.com (no https://)</div>
+        <input type="text" id="woo-domain" placeholder="myshop.com">
+      </div>
+      <div class="section">
+        <div class="label-with-info">
+          <label for="woo-key">API Key (ck_...)</label>
+          <span class="info-icon" tabindex="0" data-info="WooCommerce REST API consumer key. It is stored in Script Properties and is never shown after save.">?</span>
+        </div>
+        <input type="password" id="woo-key" placeholder="Leave blank to keep existing">
+      </div>
+      <div class="section">
+        <div class="label-with-info">
+          <label for="woo-secret">API Secret (cs_...)</label>
+          <span class="info-icon" tabindex="0" data-info="WooCommerce REST API consumer secret. Leave masked/blank to keep the existing value.">?</span>
+        </div>
+        <input type="password" id="woo-secret" placeholder="Leave blank to keep existing">
+      </div>
+    </div>
+
+    <!-- Shopify Fields -->
+    <div id="section-shopify" class="platform-section">
+      <div class="section">
+        <label>Shopify Domain</label>
+        <div class="hint">e.g., mystore.myshopify.com</div>
+        <input type="text" id="shopify-domain" placeholder="mystore.myshopify.com">
+      </div>
+      <div class="section">
+        <div class="label-with-info">
+          <label for="shopify-id">Client ID / API Key</label>
+          <span class="info-icon" tabindex="0" data-info="Shopify app Client ID or API key used for Admin API authentication.">?</span>
+        </div>
+        <input type="password" id="shopify-id" placeholder="Leave blank to keep existing">
+      </div>
+      <div class="section">
+        <div class="label-with-info">
+          <label for="shopify-secret">Client Secret</label>
+          <span class="info-icon" tabindex="0" data-info="Shopify app client secret. It is stored securely in Script Properties and remains masked.">?</span>
+        </div>
+        <input type="password" id="shopify-secret" placeholder="Leave blank to keep existing">
+      </div>
+    </div>
+
+    <!-- Gomag Credentials -->
+    <div id="section-gomag" class="platform-section">
+      <div class="section">
+        <div class="label-with-info">
+          <label for="gomag-api-shop">ApiShop</label>
+          <span class="info-icon" tabindex="0" data-info="The Gomag ApiShop header value. Depending on your Gomag account this may be the shop URL or the Api_shop_pagina value.">?</span>
+        </div>
+        <div class="hint">e.g., https://shop.ro or Api_shop_pagina</div>
+        <input type="text" id="gomag-api-shop" placeholder="https://shop.ro">
+      </div>
+      <div class="section">
+        <div class="label-with-info">
+          <label for="gomag-api-key">Apikey</label>
+          <span class="info-icon" tabindex="0" data-info="Gomag API key with read permissions for products and orders. Leave masked/blank to keep the existing key.">?</span>
+        </div>
+        <input type="password" id="gomag-api-key" placeholder="Leave blank to keep existing">
+      </div>
+    </div>
+
+    <!-- Google Analytics Fields -->
+    <div id="section-ga4" class="platform-section">
+      <label>GA4 Property ID</label>
+      <div class="hint">e.g., 123456789</div>
+      <input type="text" id="ga4-property-id" placeholder="Enter Property ID">
+    </div>
+  </div>
 
   <div id="section-product-id" class="platform-section panel">
     <div class="panel-title">Product ID Matching</div>
     <div class="hint" id="product-id-preview"></div>
 
     <div id="default-id-woocommerce" class="subsection section">
-      <label>Default Feed ID</label>
+      <div class="label-with-info">
+        <label>Default Feed ID</label>
+        <span class="info-icon" tabindex="0" data-info="This is the ID written to Metrics and GMC_Feed by default before any optional Google Ads fallback match.">?</span>
+      </div>
       <div class="hint">This is the ID written to Metrics and GMC_Feed by default.</div>
       <div class="readonly-value">Product ID</div>
     </div>
 
     <div id="default-id-shopify" class="subsection section">
-      <label>Default Feed ID</label>
+      <div class="label-with-info">
+        <label for="shopify-format">Default Feed ID</label>
+        <span class="info-icon" tabindex="0" data-info="Choose the normal product ID format for Metrics and GMC_Feed. If Google Ads fallback is enabled, the script may use another selected ID only when it matches GAds.id.">?</span>
+      </div>
       <div class="hint">This is the ID written to Metrics and GMC_Feed by default.</div>
       <select id="shopify-format">
         <option value="shopify">Shopify standard ID</option>
@@ -152,7 +267,10 @@
     </div>
 
     <div id="default-id-gomag" class="subsection section">
-      <label>Default Feed ID</label>
+      <div class="label-with-info">
+        <label for="gomag-id-mode">Default Feed ID</label>
+        <span class="info-icon" tabindex="0" data-info="Choose the normal Gomag identifier for Metrics and GMC_Feed. Gomag order matching still uses Gomag internal product IDs first.">?</span>
+      </div>
       <div class="hint">This is the ID written to Metrics and GMC_Feed by default. Gomag orders are still matched internally by Gomag product ID.</div>
       <select id="gomag-id-mode">
         <option value="sku">SKU</option>
@@ -165,90 +283,53 @@
       <label class="inline-check">
         <input type="checkbox" id="match-gads-enabled">
         <span>Use Google Ads ID when available</span>
+        <span class="info-icon" tabindex="0" data-info="When enabled, if GAds.id does not match the Default Feed ID but does match the selected alternate platform ID, the final feed ID will switch to the Google Ads ID.">?</span>
       </label>
       <div class="hint">When enabled, if GAds.id matches this alternate platform ID, GMC_Feed will use the Google Ads ID for that product.</div>
-      <label>If Google Ads does not match Default Feed ID, try</label>
+      <div class="label-with-info">
+        <label for="match-gads-mode">If Google Ads does not match Default Feed ID, try</label>
+        <span class="info-icon" tabindex="0" data-info="Pick the single alternate ID type to compare against Google Ads. Main/default ID matches always win first.">?</span>
+      </div>
       <select id="match-gads-mode"></select>
     </div>
   </div>
 
-  <!-- Google Analytics Fields -->
-  <div id="section-ga4" class="platform-section">
-    <label>GA4 Property ID</label>
-    <div class="hint">e.g., 123456789</div>
-    <input type="text" id="ga4-property-id" placeholder="Enter Property ID">
-  </div>
-
-  <hr class="divider">
-
-  <!-- WooCommerce Fields -->
-  <div id="section-woocommerce" class="platform-section">
-    <div class="section">
-      <label>WooCommerce Domain</label>
-      <div class="hint">e.g., myshop.com (no https://)</div>
-      <input type="text" id="woo-domain" placeholder="myshop.com">
-    </div>
-    <div class="section">
-      <label>API Key (ck_...)</label>
-      <input type="password" id="woo-key" placeholder="Leave blank to keep existing">
-    </div>
-    <div class="section">
-      <label>API Secret (cs_...)</label>
-      <input type="password" id="woo-secret" placeholder="Leave blank to keep existing">
-    </div>
-  </div>
-
-  <!-- Shopify Fields -->
-  <div id="section-shopify" class="platform-section">
-    <div class="section">
-      <label>Shopify Domain</label>
-      <div class="hint">e.g., mystore.myshopify.com</div>
-      <input type="text" id="shopify-domain" placeholder="mystore.myshopify.com">
-    </div>
-    <div class="section">
-      <label>Client ID / API Key</label>
-      <input type="password" id="shopify-id" placeholder="Leave blank to keep existing">
-    </div>
-    <div class="section">
-      <label>Client Secret</label>
-      <input type="password" id="shopify-secret" placeholder="Leave blank to keep existing">
-    </div>
-  </div>
-
-  <!-- Gomag Fields -->
-  <div id="section-gomag" class="platform-section">
-    <div class="section">
-      <label>ApiShop</label>
-      <div class="hint">e.g., https://shop.ro or Api_shop_pagina</div>
-      <input type="text" id="gomag-api-shop" placeholder="https://shop.ro">
-    </div>
-    <div class="section">
-      <label>Apikey</label>
-      <input type="password" id="gomag-api-key" placeholder="Leave blank to keep existing">
-    </div>
-    <div class="section">
-      <label>Catalog Rows</label>
-      <div class="hint">Use versions/variants when Merchant Center has variant-level item IDs. Use parent products only when Ads/Merchant IDs are parent-level.</div>
-      <select id="gomag-product-scope">
-        <option value="variants">Product versions / variants</option>
-        <option value="parents">Parent products only</option>
-      </select>
-    </div>
-    <div class="section">
-      <label>GMC_Feed_2 ID Mode</label>
-      <div class="hint">Creates a secondary feed using a different Gomag identifier. Leave disabled if you only need the main feed.</div>
-      <select id="gomag-secondary-id-mode">
-        <option value="">Disabled</option>
-        <option value="sku">SKU</option>
-        <option value="product_id">Gomag Internal ID</option>
-        <option value="ean">EAN</option>
-      </select>
-    </div>
-    <div class="section">
-      <label>Order Statuses to Count</label>
-      <div class="hint">Leave all unchecked to count all Gomag orders. Select statuses if you only want successful orders in product revenue/order counts.</div>
-      <div id="gomag-order-statuses" class="checkbox-list">
-        <div class="empty-state">No Gomag statuses discovered yet. Save credentials and run Gomag sync once.</div>
+  <div id="section-store-options" class="platform-section panel">
+    <div class="panel-title">Store Options</div>
+    <div id="section-gomag-options" class="platform-section">
+      <div class="section">
+        <div class="label-with-info">
+          <label for="gomag-product-scope">Catalog Rows</label>
+          <span class="info-icon" tabindex="0" data-info="Choose whether the Gomag source sheet outputs one row per product version/variant or only parent products. Use the level that matches Merchant Center IDs.">?</span>
+        </div>
+        <div class="hint">Use versions/variants when Merchant Center has variant-level item IDs. Use parent products only when Ads/Merchant IDs are parent-level.</div>
+        <select id="gomag-product-scope">
+          <option value="variants">Product versions / variants</option>
+          <option value="parents">Parent products only</option>
+        </select>
+      </div>
+      <div class="section">
+        <div class="label-with-info">
+          <label for="gomag-secondary-id-mode">GMC_Feed_2 ID Mode</label>
+          <span class="info-icon" tabindex="0" data-info="Optional secondary feed output using a different Gomag identifier than the main GMC_Feed. Use it only when another channel needs a different item ID.">?</span>
+        </div>
+        <div class="hint">Creates a secondary feed using a different Gomag identifier. Leave disabled if you only need the main feed.</div>
+        <select id="gomag-secondary-id-mode">
+          <option value="">Disabled</option>
+          <option value="sku">SKU</option>
+          <option value="product_id">Gomag Internal ID</option>
+          <option value="ean">EAN</option>
+        </select>
+      </div>
+      <div class="section">
+        <div class="label-with-info">
+          <label>Order Statuses to Count</label>
+          <span class="info-icon" tabindex="0" data-info="Filter Gomag order revenue/order counts by status. Leave all unchecked to count every order in the timeframe.">?</span>
+        </div>
+        <div class="hint">Leave all unchecked to count all Gomag orders. Select statuses if you only want successful orders in product revenue/order counts.</div>
+        <div id="gomag-order-statuses" class="checkbox-list">
+          <div class="empty-state">No Gomag statuses discovered yet. Save credentials and run Gomag sync once.</div>
+        </div>
       </div>
     </div>
   </div>
@@ -285,6 +366,7 @@
         renderGomagOrderStatuses(data.gomagOrderStatuses || [], data.gomagOrderStatusIds || []);
         document.getElementById('ga4-property-id').value = data.ga4PropertyId || '';
         setMatchGAdsModeOptions(data.matchGAdsIdsMode || '');
+        updateShopifyCountryVisibility();
       })
       .getCurrentSettingsForDialog();
 
@@ -296,12 +378,15 @@
       });
     });
 
+    document.getElementById('shopify-format').addEventListener('change', updateShopifyCountryVisibility);
+
     function setPlatform(p) {
       currentPlatform = p;
       document.getElementById('btn-woo').classList.toggle('active', p === 'woocommerce');
       document.getElementById('btn-shopify').classList.toggle('active', p === 'shopify');
       document.getElementById('btn-gomag').classList.toggle('active', p === 'gomag');
       document.getElementById('btn-ga4').classList.toggle('active', p === 'ga4');
+      document.getElementById('section-credentials').classList.toggle('visible', !!p);
       document.getElementById('section-woocommerce').classList.toggle('visible', p === 'woocommerce');
       document.getElementById('section-shopify').classList.toggle('visible', p === 'shopify');
       document.getElementById('section-gomag').classList.toggle('visible', p === 'gomag');
@@ -309,10 +394,12 @@
       document.getElementById('section-product-id').classList.toggle('visible', isStorePlatform(p));
       document.getElementById('default-id-woocommerce').classList.toggle('visible', p === 'woocommerce');
       document.getElementById('default-id-shopify').classList.toggle('visible', p === 'shopify');
-      document.getElementById('shopify-country-section').classList.toggle('visible', p === 'shopify');
       document.getElementById('default-id-gomag').classList.toggle('visible', p === 'gomag');
+      document.getElementById('section-store-options').classList.toggle('visible', p === 'gomag');
+      document.getElementById('section-gomag-options').classList.toggle('visible', p === 'gomag');
       setProductIdPreview(p);
       setMatchGAdsModeOptions();
+      updateShopifyCountryVisibility();
     }
 
     function saveSettings() {
@@ -424,6 +511,13 @@
         gomag: 'Default Feed ID: SKU / Internal ID / EAN. Optional Ads match: Internal ID or SKU.'
       };
       preview.textContent = textByPlatform[platform] || '';
+    }
+
+    function updateShopifyCountryVisibility() {
+      var countrySection = document.getElementById('shopify-country-section');
+      if (!countrySection) return;
+      var format = document.getElementById('shopify-format').value;
+      countrySection.classList.toggle('visible', currentPlatform === 'shopify' && format === 'shopify');
     }
 
     function renderGomagOrderStatuses(statuses, selectedIds) {

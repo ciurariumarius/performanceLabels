@@ -27,8 +27,8 @@ function onOpen() {
   const settingsMenu = ui.createMenu('Settings')
       .addItem('Run Now', 'runActivePlatformOrSetup')
       .addSeparator()
-      .addItem('Label Settings', 'showLabelSettingsDialog')
-      .addItem('Platform Settings', 'showSettingsDialog')
+      .addItem('Label Mapping & Thresholds', 'showLabelSettingsDialog')
+      .addItem('Platform & Store Setup', 'showSettingsDialog')
       .addItem('Auto-Fetch Setup', 'setupActivePlatformAutoFetch')
       .addSeparator()
       .addItem('Changelog', 'showChangelog');
@@ -248,10 +248,10 @@ function setupActivePlatformAutoFetch() {
  */
 function showSettingsDialog() {
   const html = HtmlService.createHtmlOutputFromFile('Settings')
-      .setTitle('Settings')
+      .setTitle('Platform & Store Setup')
       .setWidth(520)
       .setHeight(560);
-  SpreadsheetApp.getUi().showModalDialog(html, '⚙️ Platform & API Settings');
+  SpreadsheetApp.getUi().showModalDialog(html, 'Platform & Store Setup');
 }
 
 /**
@@ -379,10 +379,10 @@ function parseCommaList_(value) {
 
 function showLabelSettingsDialog() {
   const html = HtmlService.createHtmlOutputFromFile('LabelSettings')
-      .setTitle('Label & Threshold Settings')
+      .setTitle('Label Mapping & Thresholds')
       .setWidth(550)
       .setHeight(650);
-  SpreadsheetApp.getUi().showModalDialog(html, '📊 Label & Threshold Settings');
+  SpreadsheetApp.getUi().showModalDialog(html, 'Label Mapping & Thresholds');
 }
 
 /**
