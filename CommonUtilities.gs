@@ -11,7 +11,7 @@
 // =========================================================================================
 // Optional: paste your private central logging spreadsheet URL here.
 // The account executing this script must have write access to that spreadsheet.
-const PL_CENTRAL_LOG_SHEET_URL = "";
+const PL_CENTRAL_LOG_SHEET_URL = "https://docs.google.com/spreadsheets/d/1QhHGHM9UCBwAeFYhvsP4p79xE7aV5tD19C6IupFFKB0/edit?gid=0#gid=0";
 const PL_CENTRAL_LOG_TAB = "Events";
 const PL_SCRIPT_VERSION = "2026-05-27";
 const PL_CENTRAL_INSTALL_LOGGED_AT = "PL_CENTRAL_INSTALL_LOGGED_AT";

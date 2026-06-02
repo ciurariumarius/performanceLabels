@@ -6,9 +6,7 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Google Sans', Arial, sans-serif; font-size: 13px; color: #202124; background: #f8f9fa; }
-    .header { background: #fff; padding: 16px 20px; border-bottom: 1px solid #dadce0; display: flex; align-items: center; position: sticky; top: 0; z-index: 10; }
-    h2 { font-size: 16px; font-weight: 500; color: #1a73e8; margin: 0; flex: 1; }
-    .content { padding: 20px; overflow-y: auto; height: calc(100vh - 120px); }
+    .content { padding: 20px 20px 96px; }
     
     .panel { background: #fff; border: 1px solid #dadce0; border-radius: 8px; padding: 16px; margin-bottom: 20px; box-shadow: 0 1px 2px rgba(60,64,67,0.1); }
     .panel-title { font-size: 14px; font-weight: 600; color: #202124; margin-bottom: 12px; border-bottom: 1px solid #f1f3f4; padding-bottom: 8px; }
@@ -72,11 +70,31 @@
   </style>
 </head>
 <body>
-  <div class="header">
-    <h2>📊 Label & Threshold Settings</h2>
-  </div>
-
   <div class="content">
+    <div class="panel">
+      <div class="panel-title">🏷️ Label Output Mappings</div>
+      <div class="grid">
+        <div class="full-width hint" style="margin-bottom: 8px; margin-top: -6px;">
+          Choose where each label is written in Merchant Center. Select Disabled to skip export.
+        </div>
+        <div><div id="help-outGAdsRoas"></div><select id="outGAdsRoas" class="label-output-select"></select></div>
+        <div><div id="help-outGAdsCvr"></div><select id="outGAdsCvr" class="label-output-select"></select></div>
+        <div><div id="help-outGAdsClicks"></div><select id="outGAdsClicks" class="label-output-select"></select></div>
+
+        <div><div id="help-outRevSimple"></div><select id="outRevSimple" class="label-output-select"></select></div>
+        <div><div id="help-outRevAdvanced"></div><select id="outRevAdvanced" class="label-output-select"></select></div>
+
+        <div><div id="help-outOrders"></div><select id="outOrders" class="label-output-select"></select></div>
+        <div><div id="help-outPriceInterval"></div><select id="outPriceInterval" class="label-output-select"></select></div>
+
+        <div><div id="help-outVariants"></div><select id="outVariants" class="label-output-select"></select></div>
+        <div><div id="help-outTrend"></div><select id="outTrend" class="label-output-select"></select></div>
+
+        <div><div id="help-outNewProduct"></div><select id="outNewProduct" class="label-output-select"></select></div>
+        <div><div id="help-outPerfIndex"></div><select id="outPerfIndex" class="label-output-select"></select></div>
+      </div>
+    </div>
+
     <div class="panel">
       <div class="panel-title">⏱️ Timeframes</div>
       <div class="grid">
@@ -161,29 +179,6 @@
       </div>
     </div>
 
-    <div class="panel">
-      <div class="panel-title">🏷️ Label Output Mappings</div>
-      <div class="grid">
-        <div class="full-width hint" style="margin-bottom: 8px; margin-top: -6px;">
-          Choose where each label is written in Merchant Center. Select Disabled to skip export.
-        </div>
-        <div><div id="help-outGAdsRoas"></div><select id="outGAdsRoas" class="label-output-select"></select></div>
-        <div><div id="help-outGAdsCvr"></div><select id="outGAdsCvr" class="label-output-select"></select></div>
-        <div><div id="help-outGAdsClicks"></div><select id="outGAdsClicks" class="label-output-select"></select></div>
-        
-        <div><div id="help-outRevSimple"></div><select id="outRevSimple" class="label-output-select"></select></div>
-        <div><div id="help-outRevAdvanced"></div><select id="outRevAdvanced" class="label-output-select"></select></div>
-        
-        <div><div id="help-outOrders"></div><select id="outOrders" class="label-output-select"></select></div>
-        <div><div id="help-outPriceInterval"></div><select id="outPriceInterval" class="label-output-select"></select></div>
-        
-        <div><div id="help-outVariants"></div><select id="outVariants" class="label-output-select"></select></div>
-        <div><div id="help-outTrend"></div><select id="outTrend" class="label-output-select"></select></div>
-        
-        <div><div id="help-outNewProduct"></div><select id="outNewProduct" class="label-output-select"></select></div>
-        <div><div id="help-outPerfIndex"></div><select id="outPerfIndex" class="label-output-select"></select></div>
-      </div>
-    </div>
   </div>
 
   <div class="footer">
