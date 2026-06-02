@@ -121,8 +121,8 @@ function runActivePlatform_(skipLabelsOnce) {
 function showSetupGuide() {
   const html = HtmlService.createHtmlOutputFromFile('SetupGuide')
       .setTitle('Setup Guide')
-      .setWidth(620)
-      .setHeight(640);
+      .setWidth(760)
+      .setHeight(700);
   SpreadsheetApp.getUi().showModalDialog(html, 'Setup Guide');
 }
 
@@ -249,8 +249,8 @@ function setupActivePlatformAutoFetch() {
 function showSettingsDialog() {
   const html = HtmlService.createHtmlOutputFromFile('Settings')
       .setTitle('Platform & Store Setup')
-      .setWidth(520)
-      .setHeight(560);
+      .setWidth(760)
+      .setHeight(720);
   SpreadsheetApp.getUi().showModalDialog(html, 'Platform & Store Setup');
 }
 
@@ -380,8 +380,8 @@ function parseCommaList_(value) {
 function showLabelSettingsDialog() {
   const html = HtmlService.createHtmlOutputFromFile('LabelSettings')
       .setTitle('Label Mapping & Thresholds')
-      .setWidth(550)
-      .setHeight(650);
+      .setWidth(880)
+      .setHeight(760);
   SpreadsheetApp.getUi().showModalDialog(html, 'Label Mapping & Thresholds');
 }
 
@@ -568,22 +568,22 @@ function formatMatchGAdsModeLabel_(value) {
 
 function showDocumentation() {
   const html = HtmlService.createHtmlOutputFromFile('README')
-      .setWidth(480)
-      .setHeight(520);
+      .setWidth(800)
+      .setHeight(760);
   SpreadsheetApp.getUi().showModalDialog(html, 'Performance Labels — Script Documentation');
 }
 
 function showLabelsDocumentation() {
   const html = HtmlService.createHtmlOutputFromFile('LabelsDocumentation')
-      .setWidth(560)
-      .setHeight(620);
+      .setWidth(820)
+      .setHeight(760);
   SpreadsheetApp.getUi().showModalDialog(html, 'Performance Labels — Labels Documentation');
 }
 
 function showChangelog() {
   const html = HtmlService.createHtmlOutputFromFile('changes')
-      .setWidth(560)
-      .setHeight(620);
+      .setWidth(820)
+      .setHeight(760);
   SpreadsheetApp.getUi().showModalDialog(html, 'Performance Labels — Changelog');
 }
 
@@ -596,8 +596,8 @@ function showAdsScriptModal() {
   template.adsScriptContentJson = JSON.stringify(getGoogleAdsScriptContent());
   
   const html = template.evaluate()
-      .setWidth(700)
-      .setHeight(650);
+      .setWidth(920)
+      .setHeight(760);
       
   SpreadsheetApp.getUi().showModalDialog(html, '📋 Google Ads Script');
 }
